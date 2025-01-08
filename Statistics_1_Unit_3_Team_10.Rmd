@@ -1,0 +1,854 @@
+---
+title: "Assignment 3"
+author: "Group 10"
+date: "2024-12-18"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  word_document: default
+  html_document:
+    df_print: paged
+---
+## Exercise 41
+To do the transformation, a suitable matrix A and vector b are needed. Since it is an n-dimensional multivariate standard normal distribution, its mean is an n-dimensional 0-vector and its covariance matrix is the identity matrix.
+
+### a
+The eigendecomposition can be written as $\Sigma_Y=UDU'$ (columns of U contain eigenvectors $\Sigma_Y$ and diagonals of D the corresponding eigenvalues)
+$$
+\Sigma_Y=UDU'=(UD^\frac{1}{2})I(D^\frac{1}{2}U')=A\Sigma_XA'
+$$
+since $\Sigma_Y=I$, $A=UD^\frac{1}{2}$
+
+### b
+$\Sigma_Y=R'R$, where $R$ is upper triangular matrix.
+$$
+\Sigma_Y=R'R=R'IR=A\Sigma_XA'
+$$
+since $\Sigma_Y=I$, $A=R'$
+
+```{r}
+rmvnorm <- function(n, m, sigma, method="choleski") {
+  mx <- matrix(rep(m,n), byrow=T, ncol=ncol(sigma))
+  x <- matrix(rnorm(n*ncol(sigma)), ncol=n, nrow=ncol(sigma))
+  if (method == "choleski") {
+    a <- chol(sigma)
+  } else if (method == "eigen") {
+    a <- eigen(sigma)$vectors %*% sqrt(diag(eigen(sigma)$values))
+  }
+  if (method == 'eigen'){
+  a <- eigen(sigma)$vectors %*% sqrt(diag(eigen(sigma)$values))
+  }
+  t(a %*% x) + m
+}
+
+method_chol <- rmvnorm(10000, c(1.5,0.5), matrix(c(0.21,0.1,0.1,0.21),2), method = "choleski")
+method_eigen <- rmvnorm(10000, c(1.5,0.5), matrix(c(0.21,0.1,0.1,0.21),2), method = "eigen")
+plot(method_chol)
+plot(method_eigen)
+```
+The 2 plots according to the 2 methods generate very similar results.
+
+## Exercise 42
+### part a
+Proof: $E(F) = 0$ and $E(\varepsilon) = 0$
+$$
+E(F) = E \left(\frac{\sqrt\rho}{1+\rho(d-1)} \sum_{j = 1}^{d}X_j + \sqrt\frac{{1-\rho}}{1+\rho(d-1)}Y \right)= \frac{\sqrt\rho}{1+\rho(d-1)} \sum_{j = 1}^{d}E(X_j) + \sqrt\frac{{1-\rho}}{1+\rho(d-1)}E(Y) = 0
+$$
+Given that $E(X)=E(Y)=0$, $E(F)$ will be also 0.
+$$
+E(\varepsilon_i) = E(X_i - \sqrt\rho F) = E(X_i) - \sqrt\rho E(F) = 0
+$$
+Since $E(X_i)$ and $E(F)$ (just calculated) are both 0.
+
+Proof: $\rho(F,\varepsilon_i)=0$
+$$
+\begin{aligned}
+\rho(F,\varepsilon_i) &= \frac{Cov(F,\varepsilon_i)}{\sqrt{Var(F)Var(\varepsilon_i)}} = \\ &= \frac{E(F\varepsilon_i)-E(F)E(\varepsilon_i)}{\sqrt{1*(1-\rho)}} = \\
+&= \frac{E(F\varepsilon_i)}{\sqrt{1-\rho}} = \frac{E(F(X_i - \sqrt\rho F))}{\sqrt{1-\rho}} = \\
+&= \frac{E(FX_i) - \sqrt\rho E(F^2)}{\sqrt{1-\rho}}
+\end{aligned}
+$$
+$$
+\begin{aligned}
+E(FX_i) &= E \left(\frac{\sqrt\rho}{1+\rho(d-1)}\right) \sum_{j = 1}^{d}X_jX_i + \sqrt\frac{{1-\rho}}{1+\rho(d-1)}YX_i = \\ 
+&= \frac{\sqrt\rho}{1+\rho(d-1)}E(X_iX_1 + X_iX_2 ... + X_iX_d) + \sqrt\frac{{1-\rho}}{1+\rho(d-1)}E(Y*X_i) = \\
+&= \frac{\sqrt\rho}{1+\rho(d-1)} ((d-1)\rho+1) = \\
+&= \sqrt\rho
+\end{aligned}
+$$
+$$
+E(F^2) = Var(F)+(E(F))^2 = Var(F) = 1
+$$
+Back to the original correlation equation:
+$$
+\begin{aligned}
+\rho(F,\varepsilon_i)=\frac{\sqrt\rho -\sqrt\rho}{\sqrt{1-\rho}} = 0
+\end{aligned}
+$$
+Therefore F and $\varepsilon_i$ are mutually uncorrelated.
+
+### part b
+It is a linear factor model if it can be decomposed as X=$\alpha$ +BF+$\varepsilon$.
+Here: $X_i = \sqrt\rho F + \sqrt{1-\rho}Z_i$, $\alpha = 0$,
+$E(\varepsilon) = E(\sqrt{1- \rho}Zi) = \sqrt{1-\rho}E(Z_i) = 0$ therefore it is indeed a one dimensional factor model.
+```{r}
+ex42 <- function(a,b,rho) {
+result <- numeric()
+fac <- rnorm(a)
+for (i in 1:a) {
+result <- rbind(result, sqrt(rho)*fac[i]+sqrt(1-rho)*rnorm((b)))
+}
+result
+}
+ex42(7,6,0.5)
+y<-ex42(950,5,0.2)
+```
+
+cor(y)
+cov(y)
+
+## Exercise 43
+$$
+E(X) = E(m+\sqrt W AZ) = E(m) + E(\sqrt W)AE(Z) = m + E(\sqrt W)A\cdot0 = m
+$$
+since m is a vector of constants $E(m)=m$ and $\sqrt(W)$ and $Z$ are independent and $A$ is also a constant and $E(Z)=0$. 
+$$
+Cov(X)= Cov(X,X) = Var(X)=E(X^2)-(E(X))^2=E((X-E(X))(X-E(X))')
+$$
+since m constant: 
+$$
+E((\sqrt W AZ)(\sqrt W AZ)') = E(W(AZZ'A')) =  E(W)AE(ZZ')A' = E(W)AA' = E(W)\Sigma
+$$
+where $A(A')=\Sigma$
+
+If $W$ has an inverse Gamma distribution with parameters $\frac{\nu}{2},\frac{\nu}{2}$
+proof: assume $W$ has an inverse Gamma distribution and properties written in the exercise. 
+$E(X)=m$ because of the same properties. 
+$Cov(X) = E(W)\Sigma = \frac{\nu}{\nu - 2}\Sigma$ since $E(W)=\frac{\nu}{\nu - 2}$ because of the inverse Gamma distribution.
+
+```{r}
+#for the code we use the code from 41
+rmvt <- function(n, nu, m, v){
+  AZ <- rmvnorm(n, m, v, method = "eigen") 
+  W <- nu/rchisq(n,nu) 
+  M <- matrix(rep(m, n), nrow=n, byrow=T) 
+  M + sqrt(W)*AZ 
+}
+
+theoretical_t <- rmvt(n=10000, nu=4, m=c(0,0), v=matrix(c(1,0.3,0.3,1),2,2))
+empirical_t <- rt(n=10000, df=4)
+qqplot(theoretical_t[,1],empirical_t); qqline(empirical_t, col = 3)
+qqplot(theoretical_t[,2],empirical_t); qqline(empirical_t, col = 2)
+
+theoretical_t <- rmvt(n=10000, nu=13, m=c(0,0,0,0), v=matrix(c(1,0.3,0.3,0.3,0.3,1,0.3,0.3, 0.3,0.3,1,0.3,0.3,0.3,0.3,1),4,4))
+empirical_t <- rt(n=10000, df=13)
+qqplot(theoretical_t[,1],empirical_t); qqline(empirical_t, col = 3)
+qqplot(theoretical_t[,2],empirical_t); qqline(empirical_t, col = 2)
+
+#The two QQ-plots show that both the first and the second moment are t-distributed with some degrees of freedom.
+```
+
+### Exercise 44
+
+From bivariate standard normal distribution we know:
+$$
+f_{X_2|X_1=x}(x_1,x_2) = \frac{f(x_1,x_2)}{f_{x_1}(x_1)}
+$$
+where $f(x_1,x_2)$ is the probability density function (p.d.f.) of the bivariate distribution, $f_{x_1}(x_1)$ is the p.d.f. of $X_1$ and $f_{X_2|X_1=x}(x_1,x_2)$ the conditional p.d.f. of $X_2$ given $X_1=x$.
+
+This implies that:
+$$
+\begin{aligned}
+f_{X_{2} \mid X_{1}}\left(x_{2} \mid x_{1}=x\right)=\frac{\frac{1}{2 \pi \sqrt{1-\rho^{2}}} e^{-\frac{x^{2}-2 \rho x x_{2}+x_{2}^{2}}{2\left(1-\rho^{2}\right)}}}{\frac{1}{\sqrt{2 \pi}} e^{-x^{2} / 2}}=\frac{1}{\sqrt{2 \pi\left(1-\rho^{2}\right)}} e^{\frac{-x^{2}+2 \rho x x_{2}-x_{2}^{2}+x^{2}-\rho^{2} x^{2}}{2\left(1-\rho^{2}\right)}} = \\ = \frac{1}{\sqrt{2 \pi\left(1-\rho^{2}\right)}} e^{-\frac{x_{2}^{2}-2 \rho x x_{2}+\rho^{2} x^{2}}{2\left(1-\rho^{2}\right)}}=\frac{1}{\sqrt{2 \pi\left(1-\rho^{2}\right)}} e^{-\frac{\left(x_{2}-\rho x\right)}{2\left(1-\rho^{2}\right)}} \sim N\left(\rho x, 1-\rho^{2}\right)
+\end{aligned}
+$$
+Further, we can prove the following equality:
+$$
+\lim _{x \rightarrow-\infty} P\left(X_{2} \leq x \mid X_{1}=x\right)=\lim _{x \rightarrow-\infty} \phi\left(\frac{x-\rho x}{\sqrt{1-\rho^{2}}}\right)=\lim _{x \rightarrow-\infty} \phi\left(\frac{1-\rho}{\sqrt{1-\rho^2}} x\right)=0
+$$
+Moreover, under the following assumption:
+$$
+\left(X_{2}, X_{2}\right) \sim t_{2}(\nu, 0, P) \Longrightarrow \sqrt{\frac{\nu+1}{\nu+x^{2}}} \frac{X_{2}-\rho x}{\sqrt{1-\rho^{2}}} \mid x_{1}=x \sim t(\nu+1)
+$$
+We can conclude that: 
+
+$$
+\begin{aligned}
+\lim _{x \rightarrow-\infty} P\left(X_{2} \leq x \mid X_{1}=x\right) &=\lim _{x \rightarrow-\infty} t_{v+1}\left(\sqrt{\frac{v+1}{v+x^{2}}} \frac{x-\rho x}{\sqrt{1-\rho^{2}}}\right) \\
+&=\lim _{x \rightarrow-\infty} t_{v+1}\left(\sqrt{\frac{v+1}{v+x^{2}}} \frac{x(1-\rho)}{\sqrt{(1-\rho)(1+\rho)}}\right) \\
+&=\lim _{x \rightarrow-\infty} t_{v+1}\left(\sqrt{\left.\frac{(v+1) x^{2}(1-\rho)}{\left(v+x^{2}\right)(1+\rho)}\right)}\right.\\
+&=\lim _{x \rightarrow-\infty} t_{v+1}\left(\sqrt{\frac{(v+1) x^{2}(1-\rho)}{x^{2}\left(v x^{-2}+\rho v x^{-2}+1+\rho\right)}}\right) \\
+&=t_{v+1}\left(\sqrt{\frac{(v+1)(1-\rho)}{(1+\rho)}}\right)
+\end{aligned}
+$$
+### Exercise 47
+```{r}
+set.seed(19908)
+U <- runif(1000)
+
+#a
+mean<-mean(U)
+variance<-var(U)
+sd<-sqrt(var(U))
+mean
+variance
+sd
+```
+#### b
+Because of the standard uniform distribution $a=0$, $b=1$ 
+true mean: $(1-0)/2$ variance: $(1-0)^2/12$ standard deviation: $\sqrt {(1/12)}$
+```{r}
+true_mean<-(1-0)/2
+true_variance<-(1-0)^2/12
+true_sd<-sqrt(true_variance)
+#comparison:
+true_mean-mean
+true_variance-variance
+true_sd-sd
+```
+The differences between the sample and true values are small. Due to Law of Large Numbers, the difference would decline further if the sample were bigger.
+
+```{r}
+#c
+sum(U<0.6)/length(U)
+```
+The true probability that a uniform random variable on (0,1)  is smaller than 0.6 is 0.6. In the sample we got 0.61 that is very close to 0.6.
+
+## Exercise 48
+```{r}
+set.seed(112233)
+U1<-runif(10000, min=0, max=1)
+U2<-runif(10000, min=0, max=1)
+```
+#### part a
+True value: $\mathbb{E}(U_1+U_2) = \mathbb{E}(U_1) + \mathbb{E}(U_2) = 2\times\frac{1}{2} = 1$
+```{r}
+mean(U1+U2)
+#compare with the true value (1)
+mean(U1+U2)-1
+#compare with the estimate
+mean(U1+U2)-(mean(U1)+mean(U2))
+```
+The equation $\mathbb{E}(U_1+U_2) = \mathbb{E}(U_1) + \mathbb{E}(U_2)$ holds with the estimates.
+#### part b
+True value: $var(U_1)=var(U_2)=\frac {(0-1)^2} {12}=\frac {1} {12}$
+The variance formula for 2 independent variables (U1 and U2 are approximately independent): $var(U_1+U_2)=var(U_1)+var(U_2)+2cov(U_1,U_2)$, where the last term is 0, because of independence. $$var(U_1+U_2)=var(U_1)+var(U_2)=\frac {2}{12}$$
+However, the result produced by the code shows that the values are different due to the sampling process producing a small covariance between the two.
+```{r}
+var(U1+U2)
+var(U1)+var(U2)
+var(U1+U2)-var(U1)-var(U2)
+```
+#### part c
+```{r}
+sum(U1 + U2 <= 1.5)/length(U1)
+```
+
+#### part d
+```{r}
+sum(sqrt(U1) + sqrt(U2) <= 1.5)/10000
+```
+
+### Exercise 49
+```{r}
+U1<-runif(10000, min=0, max=1)
+U2<-runif(10000, min=0, max=1)
+U3<-runif(10000, min=0, max=1)
+```
+#### part a
+```{r}
+mean(U1+U2+U3)
+```
+There is a small deviation from 1.5 (true mean)
+#### part b
+```{r}
+var(U1+U2+U3)
+var(U1)+var(U2)+var(U3)
+```
+Due to simulation covariance, there is a slight difference in the 2 results.
+#### part c
+```{r}
+mean(sqrt(U1 + U2 + U3))
+```
+#### part d
+```{r}
+sum((sqrt(U1) + sqrt(U2) + sqrt(U3)) >= 0.8)/10000
+```
+
+
+### Exercise 50
+
+Note that we have to simulate from binomial distribution with n=20 (question) and probability of p=0.5, which we simulate 100 times.
+```{r}
+students <- 100
+questions <- 20
+p <- 0.5
+#a)
+marks <- rbinom(students, questions, p)
+avg_mark <- mean(marks)
+std_dev_mark <- sd(marks)
+avg_mark
+std_dev_mark
+
+#b)
+percent_marks <- (marks / questions) * 100
+prop_30_or_higher <- mean(percent_marks >= 30)
+prop_30_or_higher
+```
+
+### Exercise 51
+```{r}
+n_simulations <- 10000
+n <- 20          
+p <- 0.3        
+simulated_data <- rbinom(n_simulations, n, p)
+
+#a)
+#simulated value
+mean(simulated_data <= 5)
+
+#true value
+pbinom(5, n, p)
+
+```
+We see that the difference is relatively small approximately 0.016
+
+```{r}
+#b)
+#simulated value
+mean(simulated_data == 5)
+
+#true value
+dbinom(5, n, p)
+
+```
+
+Also here the error is relatively small 0.017
+```{r}
+#c)
+#simulated value
+mean(simulated_data)
+
+#true value
+n * p
+```
+We see that the expectation of the simulated data and the true value is almost the same (error = 0.0068)
+```{r}
+#d) 
+#simulated value
+var(simulated_data)
+
+#true value
+n * p * (1 - p)
+```
+Difference is also relatively small 0.12 but relatively larger than the other comparisons so far
+```{r}
+#e)
+#simulated value
+quantile(simulated_data, 0.95)
+qbinom(0.95, n, p)
+
+```
+This is completely the same for simulation and true value (both equal to 9)
+```{r}
+#f)
+#simulated value
+quantile(simulated_data, 0.99)
+
+#true value 
+qbinom(0.99, n, p)
+```
+Also identical.
+```{r}
+#g)
+#simulated value
+quantile(simulated_data, 0.999999)
+
+#true value
+qbinom(0.999999, n, p)
+```
+Here there is the biggest difference, because we are getting a very extreme number. I believe since extreme values appear rarely we would need to sample even larger datasets to obtain more similar values, to get closer to the true value.
+
+### Exercise 52
+
+### a)
+The function ranbin1 simulates binomial pseudorandom variates using the inversion method. It takes as input the number of values to generate n, size of the binomial distribution and lastly the probability of the binomial distribution.
+
+Before generating random numbers, the function calculates the cumulative probabilities for the distribution using pbinom(). These probabilities represent the chances of getting a certain number of successes out of the given number which is the size.
+Then it has the inner function singlenumber, which is called n times to actually generate the numbers.
+
+This inner function firstly randomly generates number (Unif[0,1]), then this number is compared to the cumulative probabilities and all that are smaller than x are summed and this is the output number.
+
+The method is based on the cdf (that is why the cumsum):
+\[
+F(k) = P(X \leq k) = \sum_{i=0}^{k} \binom{n}{i} p^{i} (1 - p)^{n - i}.
+\]
+where the found number is the smallest k such that F(k)>x.
+```{r}
+ranbin1 <- function(n, size, prob) {
+  cumbins <- pbinom(0 : (size - 1), size, prob)
+  singlenumber <- function() {
+    x <- runif(1)
+    sum(x > cumbins)
+    }
+  replicate(n, singlenumber())
+}
+
+```
+### b)
+
+```{r}
+system.time(ranbin1(1000, 10, 0.4))
+system.time(rbinom(1000, 10, 0.4))
+
+system.time(ranbin1(10000, 10, 0.4))
+system.time(rbinom(10000, 10, 0.4))
+
+system.time(ranbin1(100000, 10, 0.4))
+system.time(rbinom(100000, 10, 0.4))
+```
+As we can see from comparing the results the rbinom is quicklier in all cases than the inversion method of simulating binomial numbers
+
+### Exercise 53
+
+### a)
+The function ranbin2 simulates binomial pseudorandom values by using the Bernoulli experiments. It takes as input the number of values to generate n, the size parameter of the binomial distribution, and the prob parameter.
+
+To produce each binomial random number, the function uses an inner function singlenumber. This inner function generates size uniform random numbers between 0 and 1. Each of these numbers is compared to the probability prob, and every number that is less than prob is counted as a “success.” The total sum of these successes is then returned as one binomial random variate.
+
+Generally, this function utilizes the fact that Binomial distribution is just n different Bernoulli experiments.
+
+```{r}
+ranbin2 <- function(n, size, prob) {
+  singlenumber <- function(size, prob) {
+    x <- runif(size)
+    sum(x < prob)
+  }
+  replicate(n, singlenumber(size, prob))
+}
+```
+
+### b)
+```{r}
+system.time(ranbin2(1000, 10, 0.4))
+system.time(ranbin1(1000, 10, 0.4))
+system.time(rbinom(1000, 10, 0.4))
+
+system.time(ranbin2(10000, 10, 0.4))
+system.time(ranbin1(10000, 10, 0.4))
+system.time(rbinom(10000, 10, 0.4))
+
+system.time(ranbin2(100000, 10, 0.4))
+system.time(ranbin1(100000, 10, 0.4))
+system.time(rbinom(100000, 10, 0.4))
+
+```
+As can be seen by the elapsed time the ranbin2 is less efficient than ranbin1, which is less efficient than rbinom.
+
+### Exercise 54
+
+### a)
+
+```{r}
+ranbin3 <- function(n, size, prob) {
+  singlenumber <- function(size, prob) {
+    k <- 0
+    U <- runif(1)
+    X <- numeric(size)
+    while (k < size) {
+      k <- k + 1
+      if (U <= prob) {
+        X[k] <- 1
+        U <- U / prob
+      } else {
+        X[k] <- 0
+        U <- (U - prob) / (1 - prob)
+      }
+    }
+    sum(X)
+  }
+  replicate(n, singlenumber(size, prob))
+}
+ranbin3(100, 20, 0.4)
+
+ranbin3(100, 500, 0.7)
+
+```
+### b)
+The part that is "given" restricts the interval to [0,p], where the random variable is uniformly distributed. But then if we divide the U on the interval by p, we get a uniform distribution on [0,1].
+\[
+\frac{U}{p} \mid (U < p) \sim \text{Uniform}(0, 1).
+\]
+
+### c)
+The part that is "given" restricts the interval to [p,1], where the random variable is uniformly distributed. When we subtract the p that shifts the unform interval to [0, 1-p] and then dividing by 1-p again reverses the interval to [0,1] so we have a standard uniform distribution on [0,1]
+
+Formally:
+\[
+\frac{U - p}{1 - p} \mid (U > p) \sim \text{Uniform}(0, 1).
+\]
+
+
+### d)
+Once again the function generates n values from binomial distribution, together with given size and probability. Firstly, a uniformly [0,1] variable is created and it is compared to p and based on that it is described as 0 or 1 (if U<p we put 1). After that the random variable is adjusted according to b) or c) depending of whether it was success or failure. We compute the sum of success in the bernoulli trials (sum of 1s). 
+
+
+
+### Exercise 55
+```{r}
+n_trials <- 10000 
+days_in_year <- 365
+
+simulate_birthday <- function(group_size, n_trials, days_in_year) {
+  count_shared <- 0
+  for (i in 1:n_trials) {
+    birthdays <- sample(1:days_in_year, group_size, replace = TRUE)
+    if (any(duplicated(birthdays))) {
+      count_shared <- count_shared + 1
+    }
+  }
+  return(count_shared / n_trials)
+}
+
+group_size <- 1
+prob_shared <- simulate_birthday(group_size, n_trials, days_in_year)
+
+while (prob_shared < 0.5) {
+  group_size <- group_size + 1
+  prob_shared <- simulate_birthday(group_size, n_trials, days_in_year)
+}
+
+group_size
+```
+Analytical justification:
+We turn the problem around and look at the probability that say two people not share a birthday which is just 364/365, for 3 people this is 364/365 * 363/365 this gives us the function for n:
+\[
+P(\text{no two share a birthday}) = \prod_{k=0}^{n-1} \frac{365 - k}{365}.
+\]
+
+
+The problem that we want to solve is given by:
+
+\[
+P(\text{at least two share a birthday}) = 1 - \prod_{k=0}^{n-1} \frac{365 - k}{365} > \frac{1}{2}.
+\]
+
+Which can be equivalently transfered to:
+
+\[
+\prod_{k=0}^{n-1} \frac{365 - k}{365} < 0.5.
+\]
+
+This holds for n=23, which also checks out with the R code implementation.
+
+
+### Exercise 56
+
+```{r}
+n <- 100000
+
+a <- runif(n,-1, 1)
+b <- runif(n,-1, 1)
+c <- runif(n,-1, 1)
+
+#We have real roots iff the discriminant is larger equal to 0
+d <- b^2 - 4 * a * c
+mean(d >= 0)
+```
+Analytical justification: 
+
+The variable \( B \) is uniformly distributed on \([-1, 1]\), so the PDF is:
+\[
+f_B(b) = \frac{1}{2}, \quad b \in [-1, 1].
+\]
+The variable \( B^2 \) is derived from \( B \), so:
+\[
+P(B^2 \leq y) = P(-\sqrt{y} \leq B \leq \sqrt{y}) = \sqrt{y}, \quad y \in [0, 1].
+\]
+Differentiating this with respect to \( y \), we obtain the PDF:
+\[
+f_{B^2}(y) = \frac{d}{dy} F_{B^2}(y) = \frac{1}{2\sqrt{y}}, \quad y \in (0, 1].
+\]
+
+
+The product \( AC \) involves two independent variables \( A \) and \( C \), each uniformly distributed on \([-1, 1]\). The PDF \( f_{AC}(x) \) can be derived using the CDF \( P(AC \leq x) \):
+\[
+P(AC \leq x) = \int_{-1}^1 \int_{-1}^{x/y} f_A(a) f_C(c) \, da \, dc,
+\]
+where \( f_A(a) = f_C(c) = \frac{1}{2} \) for \( a, c \in [-1, 1] \).
+
+Differentiating \( P(AC \leq x) \) with respect to \( x \) gives:
+\[
+f_{AC}(x) = \text{(calculation shown in the R implementation below)}.
+\]
+
+
+The final probability is:
+\[
+P(B^2 - 4AC \geq 0) = \int_0^1 \int_{-1}^{y/4} f_{AC}(x) f_{B^2}(y) \, dx \, dy.
+\]
+This integral combines \( f_{AC}(x) \) and \( f_{B^2}(y) \) to evaluate the probability.
+ 
+
+### Exercise 57
+
+Let $X$ be a random variable with CDF $F$ and quantile function $F^{-1}(u) = \inf \{ x : F(x) \geq u \}$. We show that for $x \in \mathbb{R}$ and $0 \leq u \leq 1$:
+
+$$ F^{-1}(u) \leq x \iff F(x) \geq u. $$
+
+1.  **Forward Direction**: Assume $F^{-1}(u) \leq x$. By definition of $F^{-1}(u)$: 
+$$ 
+F^{-1}(u) = \inf \{ y \in \mathbb{R} : F(y) \geq u \}. 
+$$
+Since $F(x) \geq F(y)$ for all $y \leq x$, it follows that $F(x) \geq u$.
+
+2.  **Reverse Direction**: Assume $F(x) \geq u$. Then, $x$ satisfies the condition defining $F^{-1}(u)$: 
+$$ F^{-1}(u) = \inf \{ y \in \mathbb{R} : F(y) \geq u \} \leq x. 
+$$
+
+Thus, the equivalence holds.
+
+1.  **Property 1**: $F(F^{-1}(u)) \geq u$:
+
+    -   Substituting $x = F^{-1}(u)$ in the equivalence, $F(x) \geq u$ gives us $F(F^{-1}(u)) \geq u$ directly.
+
+2.  **Property 2**: $F^{-1}(F(x)) \leq x$:
+
+    -   Substituting $u = F(x)$, $F^{-1}(F(x)) \leq x$ follows directly.
+
+3.  $F(F^{-1}(u)) > u$: This occurs if $u$ lies in a flat region of $F$, i.e., $F(x) = u$ over an interval.
+
+4.  $F^{-1}(F(x)) < x$: This occurs if $F$ is constant over an interval $[a, b]$ and $x > a$.
+
+### Exercise 58
+
+Let $X$ be a random variable with continuous CDF $F$. The probability integral transform states that the random variable $F(X)$ is uniformly distributed on $[0, 1]$.
+
+1.  Define $Y = F(X)$. To show that $Y \sim \text{Uniform}(0, 1)$, we compute its CDF: 
+$$
+    G(y) = P(Y \leq y) = P(F(X) \leq y).
+$$
+
+2.  Since $F$ is continuous and strictly increasing, due to the properties of inverting the function: 
+$$
+    P(F(X) \leq y) = P(X \leq F^{-1}(y)).
+$$
+
+3.  By the definition of the CDF of $X$: 
+$$
+    P(X \leq F^{-1}(y)) = F(F^{-1}(y)) = y, \text{ for } y \in [0, 1].
+$$
+
+4.  Thus, the CDF of $Y$ is $G(y) = y$ for $y \in [0, 1]$, which is the CDF of a uniform distribution on $[0, 1]$, which means that the random variable $F(X)$ is uniformly distributed on $[0, 1]$.
+
+### Exercise 59
+
+Let $X$ be a discrete random variable attaining values $x_1 < x_2 < \cdots < x_n$ with probabilities $p_1, p_2, \ldots, p_n$. Determine the CDF of $F(X)$, where $F$ is the CDF of $X$.
+
+1.  The CDF $F(X)$ maps the discrete values $x_1 ... x_n$ to $F(x_i)$, the corresponding cumulative probabilities are: 
+$$
+    F(X) = F(x_i), \quad \text{where } P(X = x_i) = p_i.
+$$
+
+2.  This means that $F(X)$ is a random variable taking values between $[0, 1]$, implying that its distribution is discrete. Let $u_i = F(x_i)$, then $P(F(X) = u_i) = P(X = x_i) = p_i$.
+
+3.  The CDF of $F(X)$, denoted by $G(u)$, is given by: 
+$$
+    G(u) = P(F(X) \leq u) = \sum_{i : u_i \leq u} p_i.
+$$
+
+The CDF of $F(X)$ is piecewise constant, with jumps at the points $u_i = F(x_i)$, and the size of the jump at $u_i$ is $p_i$.
+
+### Exercise 60
+
+Let $X$ follow the Pareto distribution with CDF: $$
+F(x) = 1 - \left( \frac{b}{x} \right)^a, \quad x \geq b > 0, \ a > 0.
+$$ 
+Derive the inverse transformation $F^{-1}(u)$ for a uniform random variable $U \sim \text{Uniform}(0, 1)$.
+
+1.  We start with the CDF of the Pareto Distribution: 
+$$
+    F(x) = 1 - \left( \frac{b}{x} \right)^a.
+$$
+
+2.  Set $F(x) = u$: 
+$$
+    u = 1 - \left( \frac{b}{x} \right)^a.
+$$
+
+3.  Solve for $x$: 
+$$
+    \left( \frac{b}{x} \right)^a = 1 - u.
+$$ 
+$$
+    \frac{b}{x} = (1 - u)^{1/a}.
+$$
+$$
+    x = \frac{b}{(1 - u)^{1/a}}.
+$$
+
+The inverse transformation is given by: 
+$$
+F^{-1}(u) = \frac{b}{(1 - u)^{1/a}}.
+$$
+
+```{r pareto-density, echo=TRUE}
+exercise_60 <- function(){
+  a <- 2
+  b <- 2
+  u_values <- runif(100, min = 0, max = 1)
+  x_values <- b / ((1 - u_values)^(1 / a))
+  hist(x_values, probability = TRUE, main = "Pareto(2,2) Density")
+  
+  # Keep in mind Pareto Density(2,2) = 8/(x^3)
+  
+  sequence_x_values <- seq(min(x_values), max(x_values), length.out = 100)
+  
+  density_curve <- 8 / (sequence_x_values ^ 3)
+  lines(sequence_x_values, density_curve, lwd = 2, col = 'blue')
+}
+
+exercise_60()
+```
+
+### Exercise 61
+
+#### 1. Limit as $\xi \to 0$:
+
+$$
+F(x) = 1 - \left( 1 + \frac{\xi (x - \mu)}{\sigma} \right)^{-1/\xi}.
+$$
+
+Taking the logarithm and expanding $(1 + z)^{1/\xi}$ for small $\xi$: 
+$$
+\ln \left( 1 + \frac{\xi (x - \mu)}{\sigma} \right) \approx \frac{\xi (x - \mu)}{\sigma}.
+$$ 
+$$
+\left( 1 + \frac{\xi (x - \mu)}{\sigma} \right)^{-1/\xi} \to \exp\left(-\frac{x - \mu}{\sigma}\right).
+$$ 
+Thus: 
+$$
+F(x) \to 1 - \exp\left(-\frac{x - \mu}{\sigma}\right), \quad \text{as } \xi \to 0.
+$$
+
+#### 2. Support of $F(x)$:
+
+-   For $\xi > 0$, the term $1 + \frac{\xi (x - \mu)}{\sigma} \geq 0$ implies $x \geq \mu$.
+-   For $\xi < 0$, $1 + \frac{\xi (x - \mu)}{\sigma} \geq 0$ implies $x \leq \mu - \frac{\sigma}{\xi}$.
+
+The support of $F(x)$ is: - $[\mu, \infty)$ for $\xi \geq 0$, - $[\mu, \mu - \sigma / \xi]$ for $\xi < 0$.
+
+### Exercise 62
+
+The CDF of the generalized Pareto distribution is: 
+$$
+F(x) = 1 - \left( 1 + \frac{\xi (x - \mu)}{\sigma} \right)^{-1/\xi}.
+$$ 
+Let $u \sim \text{Uniform}(0, 1)$. Setting $F(x) = u$: 
+$$
+u = 1 - \left( 1 + \frac{\xi (x - \mu)}{\sigma} \right)^{-1/\xi}.
+$$ 
+Rearranging: 
+$$
+\left( 1 + \frac{\xi (x - \mu)}{\sigma} \right)^{-1/\xi} = 1 - u.
+$$ 
+$$
+1 + \frac{\xi (x - \mu)}{\sigma} = (1 - u)^{-\xi}.
+$$ 
+$$
+x = \mu + \frac{\sigma}{\xi} \left( (1 - u)^{-\xi} - 1 \right).
+$$
+
+Thus, the inverse CDF is: 
+$$
+F^{-1}(u) = \mu + \frac{\sigma}{\xi} \left( (1 - u)^{-\xi} - 1 \right), \quad \text{for } \xi \neq 0.
+$$ 
+For $\xi = 0$: 
+$$
+F^{-1}(u) = \mu - \sigma \ln(1 - u).
+$$
+
+```{r}
+genpareto <-function(n,xi,mu,sigma){
+  if(sigma <=0)
+    return("Invalid sigma")
+ 
+  if(xi == 0){
+    x <- mu-sigma*log(runif(n))
+  }else{
+    x <- (runif(n)^(-xi)-1)*(sigma/xi) + mu
+  }
+  
+  if(xi >= 0){
+    x[x >= mu]
+  }else{
+    x[(x >= mu) & (x <= mu- sigma/xi) ]
+  }
+}
+x_values <-  genpareto(n = 10000,xi = 0.1,mu = 0,sigma = 1)
+hist(x_values,probability=TRUE, xlim=c(0,15),breaks=100,col="steelblue")
+
+# Add the theoretical density of the Generalized Pareto
+# Define the Generalized Pareto PDF
+gp_density <- function(x, xi, mu, sigma) {
+  if (xi == 0) {
+    return((1 / sigma) * exp(-(x - mu) / sigma))
+  } else {
+    return((1 / sigma) * (1 + xi * (x - mu) / sigma)^(-1 / xi - 1))
+  }
+}
+
+# Generate x-values for the PDF
+x_seq <- seq(0, 15, length.out = 1000)
+
+# Compute the PDF values
+density_values <- gp_density(x_seq, xi = 0.1, mu = 0, sigma = 1)
+
+# Add the density line to the histogram
+lines(x_seq, density_values, col = "red", lwd = 2)
+
+```
+
+### Exercise 63
+
+```{r}
+# The idea is that the cumulative probability function is the literal sum of probabilities 
+#up to a given x.
+# This means F(x = 0) = 0.1, F(x = 1) = 0.3, F(x = 2) = 0.5, F(x = 3) = 0.7, F(x = 4) = 1
+# The inverse of this cfd is min{x: F(x) >= p}, hence F_inv = 0 if 0 <= p < 0.1
+# 1 if 0.1 <= p < 0.3, 2 if 0.3 <= p < 0.5, 3 if 0.5 <= p < 0.7, 4 if 0.7 <= p <= 1
+exercise_63 <- function() {
+  # Probability values for the cumulative distribution function (CDF)
+  probability_values <- c(0.1, 0.3, 0.5, 0.7, 1)
+  f_values <- seq(0, 4)
+
+  # Helper function for the inverse CDF
+  helper_function <- function(x) {
+    return(f_values[which(x <= probability_values)[1]])
+  }
+
+  # Using runif() to generate random uniform values
+  u <- runif(1000)
+  outcome <- sapply(u, helper_function)
+
+  # Calculate and display relative frequencies from runif()
+  print("Results from runif() (relative frequencies):")
+  print(table(outcome) / length(u))
+}
+
+# Run the original function
+exercise_63()
+sample_fun <- function(n) {
+  # Use sample() with specified probabilities
+  x <- sample(0:4, n, replace = TRUE, prob = c(0.1, 0.2, 0.2, 0.2, 0.3))
+  
+  # Compute relative frequencies and return as a table
+  return(table(x) / n)
+}
+
+# Run sample_fun() for n = 1000 and display results
+print("Results from sample_fun() (relative frequencies):")
+print(sample_fun(1000))
+# The sample method seems to be slightly more accurate
+
+```
