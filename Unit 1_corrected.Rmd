@@ -1,0 +1,791 @@
+---
+title: "Unit 1_Team 10"
+author: "Team 10"
+date: "2025-01-02"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  word_document: default
+  html_document:
+    df_print: paged
+    mathjax: default
+---
+
+## Exercise 1
+### a
+```{r}
+exercise_1_hilbert_a <- function(n) return( 1/ (outer(1:n, 1:n, `+`) - 1) )
+exercise_1_a_result <- exercise_1_hilbert_a(10)
+print(exercise_1_a_result)
+```
+
+### b
+The determinant of the inverse matrix: 
+$$
+\prod_{k=1}^{n-1} {(2k+1)} \binom{2k}{k}^2
+$$
+This result comes from the  Woodbury matrix identity. [Wikipedia](https://en.wikipedia.org/wiki/Woodbury_matrix_identity).
+
+Hilbert matrices are symmetric and positive definite, meaning that 
+$det(H) > 0$. Since the determinant is never zero, they are invertible.
+
+
+### c
+The issue with checking for the inverse of the hilbert matrix is that  for  values  n bigger equal to 7 , both its determinant as some of its eigenvalues become increasingly small, somewhere in the magnitude of smaller than 1e-10 which basically means that they will be approximated to 0 and R would falsely conclude that the matrix is not invertible
+```{r}
+for (i in 1:6) {
+  print(solve(exercise_1_hilbert_a(i)))
+  print(qr.solve(exercise_1_hilbert_a(i)))
+}
+#for (i in 1:7) {
+  #print(solve(exercise_1_hilbert_a(i)))
+  #print(qr.solve(exercise_1_hilbert_a(i)))
+#}
+
+```
+
+## Exercise 2
+```{r}
+x<-10:15
+p<-c(25,16,26,19,21,20)
+M<-cbind(1,x,x^2,x^3,x^4,x^5)
+m<-solve(M,p)
+m
+M%*%m #check if we get the quintic polynomial back as an output
+
+```
+
+
+## Exercise 3
+```{r}
+X<-matrix(runif(15,0,1),5,3)
+X
+
+```
+
+### a
+```{r}
+H<-X%*%solve(t(X)%*%X)%*%t(X)
+H
+eigen_H<-eigen(H)
+eigen_H["values"]
+eigen_H["vectors"]
+```
+
+### b
+```{r}
+trace<-sum(diag(H))
+trace
+sum(eigen_H$values)
+trace==sum(eigen_H$values) #very small difference due to rounding errors
+
+```
+
+
+### c
+```{r}
+det(H)
+prod(eigen_H$values)
+det(H)-prod(eigen_H$values) #very small difference again due to loss of precision
+
+```
+
+### d
+```{r}
+X
+H%*%X
+```
+
+$HX=\lambda X$ $X(X')^{-1}X'X=XX^{-1}(X'){-1}X'X=IX$
+
+$HX=IX$
+
+$\lambda=I$
+
+$\Rightarrow$ $\lambda_1=1$ $\lambda_2=1$ $\lambda_3=1$ 
+
+## Exercise 4
+```{r}
+exercise_4 <- function(){
+  hilbert <- exercise_1_hilbert_a(6)
+  
+  eigen_values <- eigen(hilbert)$value
+  eigen_vectors <- eigen(hilbert)$vectors
+  
+  hilbert_inverse <- qr.solve(hilbert)
+  eigen_values_inverse <- eigen(hilbert_inverse)$value
+  print("The Eigen values of the Hilbert Matrix are")
+  print(format(eigen_values, scientific = FALSE))
+  
+  print("The Eigen Values of the Inverse Hilbert Matrix are")
+  print(format(eigen_values_inverse, scientific = FALSE))
+}
+exercise_4()
+```
+The relationship is that the eigenvalues of the inverse are reciprocal to the eigenvalues of the Hilbert matrix  and that both matrices have the same condition number.
+
+Since the Hilbert matrix is diagonisable, it can be represented as:
+$$
+H=U\cdot D\cdot U^{-1} \Rightarrow H^{-1}=U\cdot D^{-1}\cdot U^{-1} 
+$$
+
+## Exercise 5
+```{r}
+P<-rbind(c(0.1,0.2,0.3,0.4), c(0.4,0.1,0.2,0.3), c(0.3,0.4,0.1,0.2), c(0.2,0.3,0.4,0.1))
+P
+```
+### a
+```{r}
+apply(P,1,sum)
+# The output shows how all the row sums are 1
+```
+
+### b
+```{r}
+matrix_power<-function(m,p) {
+  if (p==1) return(m)
+  m%*% Recall(m,p-1)
+}
+matrix_power(P,2)
+matrix_power(P,3)
+matrix_power(P,5)
+matrix_power(P,10)
+
+# the values of P^n converge to 0.25
+```
+
+### c
+```{r}
+x<-c(0.25,0.25,0.25,0.25)
+P%*%x
+```
+The x vector is nothing different than the eigenvector corresponding to the eigenvalue of 1. With the increase of $n$, the values of $P^n$ converge to $x = 0.25$ (the rows of $P^{10}\approx ~ x$).
+
+## Exercise 8
+$$
+\begin{bmatrix}
+L_1 & 0\\ 
+B & L_2
+\end{bmatrix}
+\hspace{0.1cm}
+\begin{bmatrix}
+x\\ 
+y
+\end{bmatrix}
+=
+\begin{bmatrix}
+b\\ 
+c
+\end{bmatrix}
+\implies
+\begin{bmatrix}
+L_1x & 0y\\ 
+Bx & L_2y
+\end{bmatrix}
+=
+\begin{bmatrix}
+b\\ 
+c
+\end{bmatrix}
+$$
+
+The formula above implies: \
+- First equation: $L_1x = b$, \
+- Second equation: $Bx + L_2y = c \Rightarrow L_2y = c - Bx$
+
+As a result: $x = L_1^{-1}b,\,\,y = L_2^{-1}(c-Bx)$.
+
+R code for these operations:
+
+```{r, eval=F}
+x <- forwardsolve(L1, b)
+y <- forwardsolve(L2, c - B%*%x)
+```
+
+## Exercise 9
+### a
+Since the elements are 0 above the diagonal, the matrix is indeed lower triangular. The determinant of a lower triangular matrix is the product of its diagonal elements, and since all diagonal elements of $M_k$ are 1, the determinant of $M_k$ is 1.  Since the determinant is non-zero the matrix $M_k$ is non-singular.
+
+
+### b
+The matrix $M_k$ can be expressed as:
+$$
+M_k = I - m_k e_k^T = I - 
+\underbrace{
+\begin{bmatrix}
+0 \\
+\vdots \\
+0 \\
+\mu_{k+1} \\
+\vdots \\
+\mu_n
+\end{bmatrix}
+}_{\text{given}}
+\underbrace{
+\begin{bmatrix}
+0 & \cdots & 1 & \cdots & 0
+\end{bmatrix}
+}_{\text{Cartesian}}.
+$$
+
+Expanding the product, we have:
+$$
+M_k = I - 
+\begin{bmatrix}
+0 & \cdots & 0 & 0 & \cdots & 0 \\
+\vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\
+0 & \cdots & 0 & 0 & \cdots & 0 \\
+0 & \cdots & \mu_{k+1} & 0 & \cdots & 0 \\
+\vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\
+0 & \cdots & \mu_n & 0 & \cdots & 0
+\end{bmatrix}.
+$$
+
+Simplifying:
+$$
+M_k =
+\begin{bmatrix}
+1 & \cdots & 0 & 0 & \cdots & 0 \\
+\vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\
+0 & \cdots & 1 & 0 & \cdots & 0 \\
+0 & \cdots & -\mu_{k+1} & 1 & \cdots & 0 \\
+\vdots & \ddots & \vdots & \vdots & \ddots & \vdots \\
+0 & \cdots & -\mu_n & 0 & \cdots & 1
+\end{bmatrix}.
+$$
+
+### c
+
+$$
+M_k^{-1} M_k = 
+    \begin{bmatrix}
+    1 &\ldots & 0 & 0 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & 1 & 0 & \ldots & 0 \\
+    0 &\ldots & \mu_{k+1} & 1 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & \mu_n & 0 & \ldots & 1 \\
+    \end{bmatrix} 
+    \begin{bmatrix}
+    1 &\ldots & 0 & 0 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & 1 & 0 & \ldots & 0 \\
+    0 &\ldots & -\mu_{k+1} & 1 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & -\mu_n & 0 & \ldots & 1 \\
+    \end{bmatrix} \\=
+$$
+$$
+     = \begin{bmatrix}
+    1 &\ldots & 0 & 0 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & 1 & 0 & \ldots & 0 \\
+    0 &\ldots & -\mu_{k+1}+\mu_{k+1} & 1 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & -\mu_n+\mu_n & 0 & \ldots & 1 \\
+    \end{bmatrix} 
+     = \begin{bmatrix}
+    1 &\ldots & 0 & 0 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & 1 & 0 & \ldots & 0 \\
+    0 &\ldots & 0 & 1 & \ldots & 0 \\
+    \vdots &\ddots & \vdots & \vdots & \ddots & 0 \\
+    0 &\ldots & 0 & 0 & \ldots & 1 \\
+    \end{bmatrix}
+$$
+
+### d
+The product $M_k M_l$ is given by:
+$$
+M_k M_l = (I - m_k e_k^T)(I - m_l e_l^T).
+$$
+Expanding:
+$$
+M_k M_l = I - m_k e_k^T - m_l e_l^T + m_k e_k^T m_l e_l^T.
+$$
+Using the property $e_k^T m_l = 0$, the term $m_k e_k^T m_l e_l^T$ vanishes, leaving:
+$$
+M_k M_l = I - m_k e_k^T - m_l e_l^T.
+$$
+
+## Exercise 10
+Let the matrix $A$ be:
+$$
+A = \begin{bmatrix}
+0 & 1 \\
+1 & 0
+\end{bmatrix}.
+$$
+
+Assume $A$ has an LU decomposition:
+$$
+A = LU = 
+\begin{bmatrix}
+l_{11} & 0 \\
+l_{21} & l_{22}
+\end{bmatrix}
+\begin{bmatrix}
+u_{11} & u_{12} \\
+0 & u_{22}
+\end{bmatrix}.
+$$
+
+Then $a_{11} = l_{11} \cdot u_{11}$ and either $l_{11} = 0$ or $u_{11} = 0$.
+
+W.l.o.g suppose $l_{11} = 0$. Since $a_{12} = l_{11} \cdot u_{12} \implies a_{12} = 0 \neq 1$ we get a contradiction. 
+
+Therefore A can not have an LU decomposition.
+
+
+
+## Exercise 11
+
+$(\Rightarrow)$ If $A$ has rank one, then $A = uv'$:
+
+Assume $A$ has rank one. This means dim(A)=1.
+
+Let $\mathbf{a}_1, \mathbf{a}_2, \dots, \mathbf{a}_n$ be the columns of $A$. Since the column space is one-dimensional, there exists a non-zero vector $\mathbf{u}$ such that all columns of $A$ are scalar multiples of $\mathbf{u}$. That is:
+$$
+\mathbf{a}_j = c_j \mathbf{u}, \quad \text{for } j = 1, 2, \dots, n,
+$$
+where $c_j$ are scalars.
+
+We can write $A$ in terms of $\mathbf{u}$ and the scalars $c_j$:
+$$
+A = \begin{bmatrix} \mathbf{a}_1 & \mathbf{a}_2 & \cdots & \mathbf{a}_n \end{bmatrix} =
+\begin{bmatrix} c_1 \mathbf{u} & c_2 \mathbf{u} & \cdots & c_n \mathbf{u} \end{bmatrix}.
+$$
+
+Factoring $\mathbf{u}$ from all columns:
+$$
+A = \mathbf{u} \begin{bmatrix} c_1 & c_2 & \cdots & c_n \end{bmatrix}.
+$$
+
+Let $\mathbf{v} = \begin{bmatrix} c_1 & c_2 & \cdots & c_n \end{bmatrix}'$. Then:
+$$
+A = \mathbf{u} \mathbf{v}'.
+$$
+
+Thus, $A$ can be expressed as the outer product of two non-zero vectors $\mathbf{u}$ and $\mathbf{v}$.
+
+$(\Leftarrow)$  If $A = uv'$, then $A$ has rank one:
+
+Assume $A = \mathbf{u} \mathbf{v}'$, where $\mathbf{u}, \mathbf{v}$ are non-zero $n$-vectors. The matrix $A$ is the outer product of $\mathbf{u}$ and $\mathbf{v}$. Each column of $A$ can be written as:
+$$
+\mathbf{a}_j = u_j \mathbf{v},
+$$
+where $u_j$ is the $j$-th entry of $\mathbf{u}$.
+
+Since each column of $A$ is a scalar multiple of $\mathbf{v}$, the columns of $A$ are linearly dependent. Furthermore, as $\mathbf{u}, \mathbf{v}$ are non-zero, the column space of $A$ is spanned by a single non-zero vector $\mathbf{v}$. Hence, $A$ has rank one.
+
+## Exercise 12
+$A_{\rm n \times n}$ elementary matrix if it differs from the $I$ by a matrix of rank 1, i.e $A=I-uv^T$ for some non-zero vectors $u$ and $v$.
+
+### a
+Let $A = I - uv'$ non-singular matrix $\Leftrightarrow$  $Au\neq$ 0
+$Au = (I-uv')u$ = $u-(v'u)u$ = $u(1-v'u)$ $\neq$ 0 $\Rightarrow$ $v'u\neq$ 1
+
+
+
+### b
+
+Let $A = I - uv'$ be an elementary matrix. We want to prove that $A^{-1} = I - \sigma uv'$ for some scalar $\sigma$.
+
+$$
+A \cdot A^{-1} = (I - uv')(I - \sigma uv')
+$$
+
+Expanding the product:
+$$
+A \cdot A^{-1} = I - uv' - \sigma uv' + uv'(\sigma uv')
+$$
+$$
+= I + uv' (\sigma uv' - \sigma -1) = I
+$$
+
+Hence $\sigma uv' - \sigma -1 = 0$
+
+Simplify for $\sigma$:
+$\sigma(v'u - 1) = 1$  $\Rightarrow$ $\sigma = \frac{1}{{v'u} - 1}$.
+
+Thus:
+$$
+A^{-1} = I - \sigma uv' = I + \frac{uv'}{uv' - 1}.
+$$
+
+
+### c
+An elementary elimination matrix $M_k$ is of the form $I - m_k e_k'$, where $e_k$ is the $k$-th standard basis vector, and $m_k$ is a vector that annihilates certain elements below the diagonal in a matrix. Clearly, $M_k$ can be written as $I - uv'$, where:
+$$
+u = m_k, \quad v = e_k, \quad \text{and} \quad \sigma = -1.
+$$
+Therefore, elementary elimination matrices are indeed elementary.
+
+
+
+## Exercise 13
+Prove the Sherman-Morrison formula:
+$$
+(A - uv')^{-1} = A^{-1} + A^{-1}u(1 - v'A^{-1}u)^{-1}v'A^{-1}.
+$$
+
+
+Proof:
+Multiply both sides by $(A - uv')$
+
+$$
+(A - uv')(A^{-1} + A^{-1}u(1 - v'A^{-1}u)^{-1}v'A^{-1})
+= I + u(1 - v'A^{-1}u)^{-1}v'A^{-1} - uv'A^{-1} - uv'A^{-1}u(1 - v'A^{-1}u)^{-1}v'A^{-1}
+$$
+$$
+= I - uv'A^{-1} + (u - uv'A^{-1}u)(1 - v'A^{-1}u)^{-1}v'A^{-1}
+$$
+
+$$
+= I - uv'A^{-1} + u(1 - v'A^{-1}u)(1 - v'A^{-1}u)^{-1}v'A^{-1}
+= I - uv'A^{-1} + uv'A^{-1}= I
+$$
+
+
+
+## Exercise 14
+Prove the Woodbury formula:
+$$
+(A - UV')^{-1} = A^{-1} + A^{-1}U(I - V'A^{-1}U)^{-1}V'A^{-1}.
+$$
+
+Proof:
+Multiply both sides by $(A - UV')$
+
+$$
+(A - UV')(A^{-1} + A^{-1}U(I - V'A^{-1}U)^{-1}V'A^{-1})
+$$
+
+$$
+= I + U(I - V'A^{-1}U)^{-1}V'A^{-1} - UV'A^{-1} - UV'A^{-1}U(I - V'A^{-1}U)^{-1}V'A^{-1}
+$$
+
+$$
+= I - UV'A^{-1} + (U - UV'A^{-1}U)(I - V'A^{-1}U)^{-1}V'A^{-1}
+$$
+
+$$
+= I - UV'A^{-1} + U(I - V'A^{-1}U)(I - V'A^{-1}U)^{-1}V'A^{-1}
+$$
+
+$$
+= I - UV'A^{-1} + UV'A^{-1}
+$$
+
+$$
+= I = \text{LHS}.
+$$
+
+## Exercise 22
+### a
+If $\lambda$ is an eigenvalue of $A_{\rm 11}$, show that it's also an eigenvalue of $A$.
+Hint: let $u$ be the corresponding eigenvector of $A_{\rm 11}$ and $v\text{ is an } (n-k)\text{-vector such that} \begin{bmatrix} u^Tv^T \end{bmatrix}^T$ is an eigenvector of $A$ with an eigenvalue $\lambda$
+
+Suppose $\lambda$ is an eigenvalue of $A_{\rm 11}$, then:
+$A_{\rm 11}u = \lambda u$
+
+We need to prove that:
+
+$Aw = \lambda w$
+where:
+$w = \begin{bmatrix} u^Tv^T \end{bmatrix}^T$ is an eigenvector of A and hence $w = \begin{bmatrix} u\\v \end{bmatrix}$
+so we have:
+
+$$
+A \begin{bmatrix} u\\
+v \end{bmatrix} = \begin{bmatrix} A_{\rm 11} & A_{\rm 12}\\ 
+O &  A_{\rm 22} \end{bmatrix}\begin{bmatrix} u\\
+v \end{bmatrix} =\begin{bmatrix} A_{\rm 11}u + A_{\rm 12}v\\ 
+A_{\rm 22}v \end{bmatrix} = \begin{bmatrix} \lambda u + A_{\rm 12}v\\ 
+A_{\rm 22}v   \end{bmatrix} \overset{!}{=} {\lambda}\begin{bmatrix} u\\
+v \end{bmatrix}
+$$
+
+
+Now we have 2 equations:
+$$
+\begin{cases} \lambda u + A_{\rm 12}v = \lambda u \\ A_{\rm 12}v = \lambda v\end{cases}
+$$
+
+From the first equation we have:
+
+$$
+\lambda u + A_{\rm 12}v = \lambda u
+A_{\rm 12}v = \lambda u -\lambda u
+A_{\rm 12}v = 0
+\Rightarrow v = 0
+$$
+
+Now let's put $v = 0$ into our original matrix equation:
+$$
+A \begin{bmatrix} u\\
+0 \end{bmatrix}=\lambda \begin{bmatrix} u\\
+0 \end{bmatrix}
+$$ 
+and hence $\lambda$ is eigenvalue of $A$.
+
+
+### b
+Proof: let z be the corresponding eigenvalue of $A_{22}$ $->$ $A_{22}z =\lambda z$, and let $\lambda$ be not an eigenvalue of $A_11$ $->$ $\left| A_{11}-\lambda I \right| \neq 0$
+$$
+A*\begin{bmatrix}
+x \\
+z
+\end{bmatrix} = \begin{bmatrix}
+A_{11} & A_{12} \\
+0 & A_{22}
+\end{bmatrix} 
+\begin{bmatrix}
+x \\
+z
+\end{bmatrix} =
+\begin{bmatrix}
+A_{11}x + A_{12}z \\
+A_{22}z
+\end{bmatrix} =
+\begin{bmatrix}
+A_{11}x + A_{12}z \\
+\lambda z
+\end{bmatrix} =
+\lambda \begin{bmatrix}
+x \\
+z
+\end{bmatrix}
+$$
+
+from this, we get 2 equations: 
+$A_{11}x + A_{12}z= \lambda x$
+
+$\lambda z=\lambda z$
+now we use that $\lambda$ is an eigenvalue of A:
+$x (A_{11}-\lambda I) = -A_{12}z_2$
+
+$z_2=-(A_{11}-\lambda I) A^{-1}_{12} x$
+
+hence, $\lambda$ is an eigenvalue of A
+
+### c
+
+Let $\lambda$ be an eigenvalue of $A$ with the corresponding eigenvector $\begin{bmatrix} u^Tv^T \end{bmatrix}^T$, where $u\text{ is the } k\text{-vector}$. Then $\lambda$ should be the eigenvalue of $A_{\rm 11}$ with the correcponding eigenvector $u$ OR eigenvalue of $A_{\rm 22}$ with the correcponding eigenvector $v$
+
+Proof: We are given that:
+$$
+A\begin{bmatrix} u^Tv^T \end{bmatrix}^T = {\lambda}\begin{bmatrix} u^Tv^T \end{bmatrix}^T
+$$
+hence:
+
+$$
+A \begin{bmatrix} u\\v \end{bmatrix} = {\lambda}\begin{bmatrix} u\\v \end{bmatrix}
+A \begin{bmatrix} u\\v \end{bmatrix} = \begin{bmatrix} A_{\rm 11} & A_{\rm 12}\\ O &  A_{\rm 22} \end{bmatrix}\begin{bmatrix} u\\v \end{bmatrix} =
+\begin{bmatrix} A_{\rm 11}u + A_{\rm 12}v\\ A_{\rm 22}v \end{bmatrix}  ={\lambda}\begin{bmatrix} u\\v \end{bmatrix}
+$$
+
+Now we have 2 different equations:
+$$
+\begin{cases}A_{\rm 11}u + A_{\rm 12}v = {\lambda}u \\ A_{\rm 22}v = {\lambda}v\end{cases}
+$$
+If $v\neq 0$ $\lambda$ is an eigenvalue of $A_{\rm 22}$
+If $v =  0$:
+$$
+A_{\rm 11}u + A_{\rm 12}0 = {\lambda}u \Rightarrow  A_{\rm 11}u = {\lambda}u
+$$
+
+Hence, $\lambda$ is an eigenvalue of $A_{\rm 11}$
+
+
+### d
+$\Rightarrow$ : proven in part c)
+
+$\Leftarrow$ : if $\lambda$ is eigenvalue of  $A_{11}$ then it is eigenvalue of A. It was proven in part a).
+
+Or if $\lambda$ is eigenvalue of $A_{22}$ then it is eigenvalue of A. It was proven in part b).
+
+
+## Exercise 24
+Consider $A + \mathbf{u} \mathbf{v}^\top$, then by the matrix determinant lemma we know that:
+$$
+\det(A + \mathbf{u} \mathbf{v}^\top) = \det(A)(1+\mathbf{v}^\top A^{-1} \mathbf{u})
+$$
+Now consider $A = I$, then:
+$$
+\det(I + \mathbf{u} \mathbf{v}^\top) = \det(I)(1+\mathbf{v}^\top I^{-1} \mathbf{u})
+$$
+Moreover, since $\det(I)= 1$ and $I^{-1} = I$:
+$$
+\det(I + \mathbf{u} \mathbf{v}^\top) = 1 + \mathbf{v}^\top \mathbf{u}.
+$$
+Hence, the statement is proven.
+
+## Exercise 25
+Let's first prove that $H$ is orthogonal matrix. So it has to hold that $H^T = H^{-1}$
+
+$$
+HH^T = (I-2\frac{vv^T}{v^Tv}) (I-2\frac{vv^T}{v^Tv})^T \overset{H=H^T}{=} \\
+(I-2\frac{vv^T}{v^Tv})  (I-2\frac{vv^T}{v^Tv}) = \\
+I - 4\frac{vv^T}{v^Tv} + 4\frac{(vv^T)(vv^T)}{(v^Tv)^2} = \\
+I - 4\frac{vv^T}{v^Tv} + 4\frac{(vv^Tvv^T)}{(v^Tvv^Tv)} = \\
+I - 4 + 4 =  I\\
+$$
+
+Hence, matrix $H$ is orthogonal. This means that it's columns are orthonormal systems and hence, vector $v$ is orthonormal.
+Eigenvalues of orthogonal matrices have absolute value of 1, since multiplication by an orthognal matrix is length preserving.
+So we should have 2 eigenvalues, $\lambda$ is $\pm$ 1. 
+
+Let $x$ denote the eigenvector of $H$ and $\lambda$ denote the eigenvalue of $H$.
+We have:
+$Hx = \lambda x$
+$$
+Hx = (I-2\frac{vv^T}{v^Tv})x = Ix-2\frac{vv^T}{v^Tv}x  \overset{v^Tv=1}{=} x-2x = -x
+$$
+
+Hence, $\lambda x = -x \Rightarrow  \lambda_{\rm 1}= -1$ 
+$$
+Hx = (I-2\frac{vv^T}{v^Tv})x = Ix-2\frac{vv^T}{v^Tv}x  \overset{v^Tv=0}{=} x
+$$
+Hence, $\lambda x = x \Rightarrow  \lambda_{\rm 2}= 1$ 
+
+So, the eigenvalues of $H$ are $\pm$ 1.
+
+
+Geometric interpretation: The Householder transformation $H$ reflects a vector across the hyperplane orthogonal to $\mathbf{v}$. Any vector orthogonal to $\mathbf{v}$ remains unchanged, while vectors parallel to $\mathbf{v}$ are inverted.
+
+## Exercise 27
+
+
+
+We use induction to show that $(-1)^np(z)$ is the characteristic polynomial of: 
+$$
+p(z) = \gamma_0 + \gamma_1z + ... + \gamma_{n-1}z^{n-1} + z^n
+$$
+	
+Proof by Induction:
+1. Initial step.
+For $n = 1$ we have: 
+$$
+\det(C(1) - Iz) = \det[-\gamma_0 - Iz] = -\gamma_0 - z = (-1)^np(z)
+$$
+We conclude that the statement holds for $n = 1$. 
+2. Inductive step.
+We form the inductive hypothesis $n$: $\det(C(n) - Iz) = (-1)^np(z)$ and prove that it is also true for $n + 1$:
+			
+$$
+			\det(C(n+1) - Iz) = \det \begin{bmatrix}
+				-z & 0 & \ldots & 0 & -\gamma_0 \\
+				1 & -z & \ldots & 0 & -\gamma_1 \\
+				0 & 1 & \ldots & 0 & -\gamma_2 \\
+				\vdots & & \ddots & & \vdots \\
+				0 & 0 & \ldots & 1 & -\gamma_n - z
+			\end{bmatrix} =
+$$
+
+$$
+= (-1)^{2n+1} * 1 * \det \begin{bmatrix}
+				-z & 0 & 0 & \ldots  & -\gamma_0 \\
+				1 & -z & 0 & \ldots  & -\gamma_1 \\
+				0 & 1 & -z & \ldots  & -\gamma_2 \\
+				\vdots & & \ddots & & \vdots \\
+				0 & \ldots & 0 & 1 & -\gamma_{n-1}
+			\end{bmatrix} + 
+			(-1)^{2n+2}(-\gamma_n - z) * \det \begin{bmatrix}
+				-z & 0 & 0 & \ldots &   0 \\
+				1 & -z & 0 & \ldots & 0 \\
+				0 & 1 & -z & \ldots & 0 \\
+				\vdots & & \ddots & & \vdots \\
+				0 & 0 & \ldots & 1 & -z
+			\end{bmatrix} =
+$$
+
+$$
+= -1 * \begin{bmatrix}
+				-z & 0 & 0 & \ldots & -\gamma_0 \\
+				1 & -z & 0 & \ldots & -\gamma_1 \\
+				0 & 1 & -z & \ldots & -\gamma_2 \\
+				\vdots & & \ddots & & \vdots \\
+				0 & \ldots & 0 & 1 & -\gamma_{n-1}-z
+			\end{bmatrix}
+			+ (-z)^n + (-\gamma_n-z) * (-z)^n =
+$$
+
+$$ 
+= (-1) * C(n) + (-1)^n * z^n + (-1)^n * (-\gamma_n)z^n + (-1)^{n+1}z^{n+1} = 
+$$
+
+$$ 
+			= (-1) * (-1)^np_n(z) + (-1)^n * z^n + (-1)^n * (-\gamma_n)z^n + (-1)^{n+1}z^{n+1} =
+$$ 
+
+$$
+			= (-1)^{n+1}\left(p_n(z) - z^n + \gamma_n * z^n + z^{n+1}\right) = (-1)^{n+1}p_{n+1}(z)
+$$ 
+
+The statement holds for $n + 1$.
+		
+
+
+```{r}
+exercise_27 <- function(polynomial_vector){
+  matrix <- c()
+  
+  # This will keep trac where we add the 1s in the matrix
+  itt <- 0 
+  
+  # We will create the companion matrix row by row
+  # We loop over every element except the last one, which is 1 i.e. not included in the companion matrix
+  for (coefficient in polynomial_vector[-length(polynomial_vector)]){
+    # Each itteration the row is 0,0,0,0,0,0,0 or n-2 zeroes has a 1
+    # whose position depends on the coefficient being referenced and the last cell is -element
+    row <- numeric(length(polynomial_vector) - 2)
+    
+    # This adds the 1 on each row
+    if ( itt != 0 ) row[itt] <- 1
+    
+    # This adds the -coefficient and finishes creating the row
+    row <- c(row, -coefficient)
+    
+    # We append each vector to the matrix as a row
+    matrix <- rbind(matrix, row)
+    itt <- itt + 1
+  }
+  eigen_values <- eigen(matrix)$values
+  return(eigen_values)
+}
+exercise_27_result <- exercise_27(c(24, -40, 35, -13, 1))
+print("The eigen values are")
+print(exercise_27_result)
+```
+
+## Exercise 29
+```{r}
+exercise_29 <- function(A){
+  
+  output <- c()
+
+  for (i in 1:ncol(A)){
+    
+    output <- c(output, A[, i])
+  }
+  return(output)
+}
+exercise_29_result <- exercise_29(matrix(1:100, 20 ,5))
+exercise_29_result
+```
+
+
+## Exercise 30
+```{r}
+exercise_30 <- function(A){
+  output <- c()
+  
+  for (i in 1:ncol(A)){
+    output <- c(output, A[i:nrow(A), i])
+  }
+  return(output)
+}
+exercise_30_result <- exercise_30(matrix(c(1,2,3,2,4,5,3,5,6), nrow = 3))
+exercise_30_result
+```

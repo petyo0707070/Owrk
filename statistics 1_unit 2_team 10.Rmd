@@ -1,0 +1,549 @@
+---
+title: "Homework 2"
+author: Group 10
+date: "2024-12-11"
+header-includes:
+- \DeclareMathOperator{\diag}{diag}
+output:
+  pdf_document:
+    latex_engine: xelatex
+  word_document: default
+  html_document:
+    df_print: paged
+---
+## Exercise 15
+### a
+$B$ is positive definite if its leading principal minors are strictly positive. The first minor: $m(1)=\alpha$, so $\alpha$ has to be positive.
+Also $B$ being positive definite implies: $x'Bx>0$, i.e.
+\begin{equation*}x'\begin{bmatrix}
+					\alpha  & a' \\
+					a  & A
+				\end{bmatrix}x >0\end{equation*}
+where \begin{equation*}x'=\begin{bmatrix}
+x_1 \\ x_2 \\ \vdots \\ x_{n+1}
+\end{bmatrix}\end{equation*}
+Set $x_1=0$:
+\begin{equation*}[0, x_2,...,x_{n+1}]\begin{bmatrix}
+					\alpha  & a' \\
+					a  & A
+				\end{bmatrix}\begin{bmatrix}
+0 \\ x_2 \\ \vdots \\ x_{n+1}
+\end{bmatrix}>0\end{equation*}
+\Rightarrow \begin{equation*}[x_2, \dots ,x_{n+1}]A\begin{bmatrix}
+x_2 \\ \vdots \\ x_{n+1}
+\end{bmatrix}>0\end{equation*}
+So A must be positive definite for B to be positive definite.
+
+### b
+Choleski decomposition means a factorization method for positive definite matrices of the form $B=LL'$ where L is the lower triangular matrix.
+
+\begin{equation*}\begin{bmatrix}
+					\alpha  & a' \\
+					a  & A
+				\end{bmatrix} = \begin{bmatrix}
+					L_{11}  & 0 \\
+					L_{21} & L_{22}
+				\end{bmatrix} \cdot \begin{bmatrix}
+					L_{11}'  & L_{21}' \\
+					0  & L_{22}'
+				\end{bmatrix} = \begin{bmatrix}
+				L_{11}L_{11}' & L_{11}L_{21}' \\
+				L_{21}L_{11}' & L_{21}L_{21}'+L_{22}L_{22}'
+				\end{bmatrix}
+				\end{equation*}
+So \begin{equation*} L=L_{11}L_{11}' \Rightarrow L_{11} = \sqrt\alpha\end{equation*}
+\begin{equation*}a = L_{21}L_{11}' \Rightarrow L_{21} = \frac{1}{\sqrt\alpha}a\end{equation*}\
+\begin{equation*}a' = L_{11}L_{21}' \Rightarrow L_{21}' = \frac{1}{\sqrt\alpha}a'\end{equation*}\
+\begin{equation*}A = L_{21}L_{21}' + L_{22}L_{22}' = \frac{1}{\alpha}aa' +L_{22}L_{22}' \Rightarrow L_{22} = \sqrt{A-\frac{1}{\alpha}aa'}\end{equation*}
+
+
+
+## Exercise 16
+### a
+Given that the symmetric matrix 
+\[
+B = \begin{bmatrix} A & a \\ a' & \alpha \end{bmatrix}
+\]
+
+is positive definite, we aim to show that the scalar \( \alpha > 0 \) and that the matrix \( A \) is positive definite.
+
+### Step 1: Positive Definiteness of \( \alpha \)
+
+By definition of positive definiteness, \( B > 0 \) implies \( x'Bx > 0 \) for all non-zero \( x \). Let:
+
+\[
+x = \begin{bmatrix} 0 \\ \vdots \\ 0 \\ x_{n+1} \end{bmatrix}
+\]
+
+The quadratic form simplifies to:
+
+\[
+x'Bx = \alpha x_{n+1}^2
+\]
+
+Since \( x'Bx > 0 \) for any \( x \neq 0 \), it must hold that \( \alpha > 0 \).
+
+### Step 2: Positive Definiteness of \( A \)
+
+Partition \( B \) as follows:
+
+\[
+B = \begin{bmatrix} A & a \\ a' & \alpha \end{bmatrix}, \quad x = \begin{bmatrix} x_1 \\ x_{n+1} \end{bmatrix}
+\]
+
+where \( x_1 \in \mathbb{R}^n \) and \( x_{n+1} \in \mathbb{R} \). Then:
+
+\[
+x'Bx = x_1'Ax_1 + 2x_{n+1}a'x_1 + \alpha x_{n+1}^2
+\]
+
+Set \( x_{n+1} = 0 \). The quadratic form reduces to:
+
+\[
+x'Bx = x_1'Ax_1
+\]
+
+Since \( B > 0 \), it follows that \( x'Bx > 0 \) for all \( x \neq 0 \). Therefore, \( x_1'Ax_1 > 0 \) for all \( x_1 \neq 0 \), which implies that \( A > 0 \).
+
+### Conclusion
+
+We have shown that:
+
+1. \( \alpha > 0 \)
+2. \( A \) is positive definite.
+
+Thus, the conditions for \( B \) being positive definite are satisfied.
+
+
+
+
+### b
+Choleski decomposition means a factorization method for positive definite matrices of the form $B=LL'$ where L is the lower triangular matrix.
+
+\begin{equation*}\begin{bmatrix}
+					A  & a \\
+					a'  & \alpha
+				\end{bmatrix} = \begin{bmatrix}
+					L_{11}  & 0 \\
+					L_{21}  & L_{22}
+				\end{bmatrix} \cdot \begin{bmatrix}
+					L_{11}'  & L_{21}' \\
+					0  & L_{11}'
+				\end{bmatrix}= \begin{bmatrix}
+				L_{11}L_{L11}' & L_{11}L_{21}' \\
+				L_{21}L_{11}' & L_{21}L_{21}'+L_{22}L_{22}'
+				\end{bmatrix}
+				\end{equation*}
+So \begin{equation*}A = L_{11}L_{11}'\end{equation*} \
+\begin{equation*}a' = L_{21}L_{11}' \Rightarrow L_{21} = a'(L_{11}')^{-1}\end{equation*} \
+\begin{equation*}a = L_{11}L_{21}' \Rightarrow L_{21}' = (L_{11})^{-1}a\end{equation*} \
+\begin{equation*}\alpha = L_{21}L_{21}' + L_{22}L_{22} \\\Rightarrow\alpha = a'(L_{11}')^{-1}(L_{11})^{-1}a+L_{22}^2 \\\Rightarrow\alpha=a'A^{-1}a+L_{22}^2\\=>L_{22} =\sqrt{\alpha-a'A^{-1}a}\end{equation*} 
+
+
+## Exercise 17
+LES:
+\begin{equation*}A(\epsilon)x(\epsilon)=b(\epsilon), A(\epsilon)=\begin{bmatrix}
+					\epsilon  & 1 \\
+					1  & 1
+				\end{bmatrix}, b(\epsilon)=\begin{bmatrix}
+1+\epsilon \\ 2
+\end{bmatrix}\end{equation*}
+We  can solve it using the elementary elimination matrix:
+\begin{equation*}M(\epsilon) = \begin{bmatrix}
+1 &  \\ 
+-\frac{1}{\epsilon} & 1
+\end{bmatrix}\end{equation*}
+```{r}
+res <- list()
+for (k in 1:10) {
+  e <- 10^((-2)*k)
+  A <- cbind(rbind(e,1),rbind(1,1))
+  b <- cbind(rbind(1+e,2))
+  M <- cbind(rbind(1,-1/e),rbind(0,1))
+  res[[k]] <- backsolve(M%*%A,M%*%b)
+}
+res
+```
+When epsilon becomes smaller, the solution will become less accurate, the issue we can observe already at k=6.
+
+## Exercise 18
+The 2-norm of a matrix $A$ is defined as:
+\begin{equation}
+\| A\|_2 = \underset{\mathrm{x\neq 0}}{\max} \frac{\| A\|_2}{\| x\|_2}
+\end{equation}
+\begin{equation}
+\| A\|_2 \overset{\Delta}{=} \underset{\mathrm{x\neq 0}}{\sup} \frac{\| A\|_2}{\| x\|_2} =
+\max \, \sigma_1 = \sigma_{\rm \max}(A)
+\end{equation}
+We can use the singular value decomposition $A=UDV'$, where U and V orthogonal and D diagonal with $D=diag[\sigma_1,....,\sigma_n]$ where $\sigma_i$ are the singular values of $A$
+\begin{equation*}||A||_2 = \max\frac{||UDV'x||_2}{||x||_2}\end{equation*}
+Rearranging $||UDV'x||_2$:
+\begin{equation*}||UDV'x||_2 = \sqrt{(UDV'x)'(UDV'x)} = \sqrt{(x'VD'U')(UDV'x)} = \sqrt{(x'VD')(DV'x)} = ||DV'x||_2 \end{equation*}
+For the denominator rearranging $y=V'x$ to $Vy=x$, so we form:
+\begin{equation*}||Vy||_2 = \sqrt{(Vy)'(Vy)} = \sqrt{(y'V')(Vy)} = \sqrt{(y')(y)} = ||y||_2 \end{equation*}
+
+The whole equation becomes then:
+\begin{equation*}||A||_2 = \max\frac{||Dy||_2}{||y||_2}=\max\frac{\sqrt{\sum_{i = 1}^{n} \sigma^2_i|y_i|^2}}{\sum_{i = 1}^{n} |y_i|^2}\end{equation*}
+
+The largest singular value, \( \sigma_{\max} \), maximizes the expression because the singular values \( \sigma_i \) correspond to the square roots of the eigenvalues of \( A'A \). The Rayleigh quotient ensures that the maximum is achieved at the largest eigenvalue of \( A'A \), which corresponds to \( \sigma_{\max}^2 \). Therefore, the maximum of \( \|A\|_2 = \sigma_{\max} \) is achieved when the weight of \( |y_i|^2 \) is concentrated entirely on \( \sigma_{\max} \).
+
+The maximum is guaranteed because \( A'A \) is symmetric and positive semi-definite, meaning all eigenvalues are real and non-negative. By the spectral theorem, \( A'A \) has a complete set of orthonormal eigenvectors, ensuring that the Rayleigh quotient achieves its supremum at the largest eigenvalue. This eigenvalue corresponds to \( \sigma_{\max}^2 \), guaranteeing that \( \|A\|_2 = \sigma_{\max} \) is both attained and unique:
+\begin{equation*}||A||_2 = \sqrt{\sigma_{\max}^2}=|\sigma_{\max}|\end{equation*}
+
+```{r}
+A <- matrix(c(2, 4, 6, 8), nrow = 2, ncol = 2)
+svd_result <- svd(A) #singular value decomposition
+norm_2 <- max(svd_result$d) #the largest
+result <- cat("2-norm of A:", norm_2, "\n")
+```
+
+## Exercise 19
+
+The condition number of a regular square matrix: 
+\begin{equation*}\kappa(A) = ||A||_2||A^{-1}||_2\end{equation*} 
+
+The largest singular value of $A$ is \begin{equation*}||A||_2 = \sigma_{max}\end{equation*}
+
+Additionally: $||A^{-1}||=\sigma_{A^{-1}max}$
+
+Let A=UDV' be the SVD of A.
+Therefore: \begin{equation*}A^{-1}=(UDV^t)^{-1}=(V^t)^{-1}D^{-1}U^{-1}=VD^{-1}U^{-1}\end{equation*}
+
+$D$ is diagonal, so \begin{equation*}D^{-1} = diag[\frac{1}{\sigma_1},\frac{1}{\sigma_2},....,\frac{1}{\sigma_n}]\end{equation*}\
+
+Moreover, we know that $\max[\frac{1}{\sigma_1},\frac{1}{\sigma_2},....,\frac{1}{\sigma_n}] = \frac{1}{\min[\sigma_1,\sigma_2,....,\sigma_n]}$ 
+($\sigma_1$ and $\sigma_n$ are the largest and smallest singular values of A).
+With the derivation we get: 
+\begin{equation*}\kappa(A)=||A||_2||A^{-1}||_2=\sigma_{A\max}\sigma_{A^{-1}\max}=\frac{\sigma_{A\max}}{\sigma_{A\min}}\end{equation*}\
+
+```{r}
+k<-function(A) max(svd(A)$d)/min(svd(A)$d)
+A<-matrix(1:4,2,2)
+k(A)
+#the result is the same as by R's kappa function:
+kappa(A, exact=TRUE)
+```
+
+## Exercise 20
+Show:
+\begin{equation*}\frac{||\Delta x||}{||x||} \le \kappa(A)\frac{||\Delta b||}{||b||}\end{equation*}
+
+We know:
+\begin{equation*}\Delta x = A^{-1}\Delta b\end{equation*}
+\begin{equation*}||b|| = ||Ax|| \le ||A||||x||\end{equation*}
+
+From these we can conclude: 
+\begin{equation*}\frac{||\Delta x||}{||x||} \le ||A||||A^{-1}||\frac{||\Delta b||}{||b||}\end{equation*}
+Rearranging:
+\begin{equation*}\frac{||\Delta x||}{||x||}=\frac{A^{-1}||\Delta b||} {||x||} = ||A||||A^{-1}||\frac{ ||\Delta b||} {||A||||x||} \le ||A||||A^{-1}|| \frac{||\Delta b||} {b} = \kappa(A)\frac{||\Delta b||}{||b||}\end{equation*}
+
+## Exercise 21
+For experimenting we use QR, SVD and LU decompositions.
+```{r}
+eps_1 <- 2^(-52)
+eps_2 <- sqrt(2^(-52))
+A <- function(eps) cbind(rbind(1,1-eps),rbind(1+eps,1))
+b <- function(eps) cbind(rbind(1+eps+eps^2,1))
+A2 <- A(eps_2)
+b2 <- b(eps_2)
+try(solve(A2,b2, tol = 2^-52))
+try(qr.solve(A2,b2,tol=2^-52))
+kappa(A2)
+```
+The condition number of the matrix is very high, therefore the numerical calculations will not be exact. Choosing a small epsilon makes R interpreting the matrix singular and the LES cannot be solved. So we change the value for a higher one:
+```{r}
+eps_3<-1.490116*10^(-7)
+A3<-A(eps_3)
+b3<-b(eps_3)
+
+#LU decomposition
+lu<-solve(A3,b3)
+b3-A3 %*% lu
+#QR decomposition
+qr<-qr.solve(A3,b3,tol=2^-100)
+b3-A3 %*% qr
+#SVD decomposition
+A_svd <- svd(A3)
+U <- A_svd$u
+s <- A_svd$d
+V<- A_svd$v
+cmult <- function(A, v) sweep(A, 2, v, `*`)
+x <- cmult(V, 1 / s) %*% crossprod(U, b3)
+b3.svd <- A3 %*% x
+x
+b3.svd - b3
+kappa(A3)
+```
+The decompositions result in different inverse matrices. kappa is still very high which indicates precision errors again.
+
+## Exercise 23
+A is a nxn matrix, $A = u v'$ for non-zero vectors u and v.
+
+### a)
+Consider for some vector x:
+$Au = (uv')u = uv'u= u(vu')$, $vu'$ is a scalar so $= (vu')u = (vu')'u$, but then $Au=(uv')u$ thus $uv'$ is an eigenvalue.
+
+### b)
+Since A has rank one = A has only one linearly independent column. But then A has to have n-1 column vectors, which are dependent and the kernel of A can be denoted as $Ax = 0$, which is equivalent to $\lambda = 0$ such that $Ax = \lambda x$ since the dimesnion of the kernel space is n-1, there are n-1 eigenvalues of 0.
+
+### c)
+We have that:
+$A = U\Sigma V'$, where U, V' are orthogonal and $\Sigma$ is a diagonal matrix of singular values.
+
+Further note that $AA'= U\Sigma V' (U\Sigma V')' = U\Sigma U' = uv'(uv')' = \|v\|^2 uu^\top$
+
+AA' is rank-one, and u is an eigenvector of AA' with eigenvalue $\|v\|^2\|u\|^2$
+
+From that first column of U is $u_1 = \frac{u}{\|u\|}$ remaining columns of  U form an orthonormal basis for the space orthogonal to $u_1$.
+
+$A'A = v^\top (uu^\top) v = v (\|u\|^2) v^\top = \|u\|^2 vv^\top$
+
+A'A is also of rank one, and  v is an eigenvector of  A'A  with eigenvalue $ \|u\|^2 \|v\|^2 $.
+
+From that first column is $v_1 = \frac{v}{\|v\|}$ remaining cols are forming the orthonormal basis which is orthogonal to the first vector $v_1$.
+
+The singular values of A are the square roots of the eigenvalues of  AA', thus $\sigma_1 = \|u\| \|v\|$. Since A is of rank one the remaining singular values are all 0.
+
+### d)
+$x_k = A x_{k-1} = A A x_{k-2} = (uv')(uv')x_{k-2} = u(v'u)(v'x_{k-2})$ Note that the two latter elements in brackets are scalars and also u is just the eigenvector of A (from part a). Thus already after the first multiplication there is the scalar multiple of the eigenvector u. However, to get exactly the eigenvector we would have to have the vector equal to the eigenvector u.
+
+
+
+## Exercise 26
+```{r 26}
+exercise_26 <- function(vector){
+  helper_function <- function(n){
+    A <- matrix(rep(-1, n*n), n ,n)
+    A[!upper.tri(A)] <- 0
+    diag(A) <- 1
+    return(max(svd(A)$d)/min(svd(A)$d))
+  }
+  ratios <- sapply(vector, helper_function)
+  return(ratios)
+}
+exercise_26(3:8)
+```
+It is quite clear that the ratio between the max and min singular value starts growing very fast, nearly exponentially
+
+## Exercise 28
+The singular value decomposition (SVD) expresses a matrix \( A \) as \( A = UDV' \), where:
+- \( U \) and \( V \) are orthogonal matrices.
+- \( D \) is a diagonal matrix of singular values \( \sigma_i \).
+
+Each column of \( U \) corresponds to a singular vector associated with \( A \). For non-zero singular values in \( D \), the corresponding columns of \( U \) span the range of \( A \) because the product \( UD \) describes the image of \( A \). These columns are orthonormal by the properties of \( U \), which ensures they form a basis for the range of \( A \).
+```{r 28.1}
+exercise_28_orthonormal <- function(A){
+  singular_vectors <- svd(A)$u
+  singular_values <- svd(A)$d
+  non_zero_singular_values <- which(singular_values > .Machine$double.eps)
+
+  return(singular_vectors[, non_zero_singular_values])
+}
+exercise_28_orthonormal(matrix(seq(1,25),5 ,5))
+```
+
+The columns of V whose corresponding singular values in D are 0 are what we are looking for.
+The columns of \( V \) correspond to singular vectors associated with \( A \). For singular values \( \sigma_i = 0 \) in \( D \), the corresponding columns of \( V \) span the null space of \( A \). This is because the equation \( AV = UDV' \) implies that when \( \sigma_i = 0 \), the contribution of the corresponding singular vector to \( A \) is zero. Therefore, these columns form a basis for the null space of \( A \).
+```{r 28.2}
+exercise_28_kernel <- function(A){
+  singular_vectors <- svd(A)$v
+  singular_values <- svd(A)$d
+  zero_singular_values <- which(singular_values <= .Machine$double.eps)
+  
+  return(singular_vectors[, zero_singular_values])
+}
+exercise_28_kernel(matrix(seq(0,96, 2), 7, 7))
+```
+
+## Exercise 31
+
+We randomly generate the unique non-redundant vector vech(A). However, this vech(A), has to have the length of n*(n+1)/2, as that is the number of non-redundant elements in a symmetric nxn matrix A (These are all the lower diagonal + the diagonal elements).
+
+Moreover, from the vech(A) we create the matrix A as inputing the entries column-wise to the lower-triangular, and then similarly row-wise to the upper-triangular, by which we achieve the symmetric property.
+
+Lastly, we get the duplication matrix D by having a matrix with entries 0 and 1, where the duplication 1 is at entries D_i,j where vech(A)_j == c(A)_i. So, we just compare the elements of the vec(A) and vech(A) using the outer function (and multiply it by 1 to get numerical matrix)
+
+We should get in the end a duplication matrix, which has 0 and 1 entries and is of the form (n x n*(n+1)/2).
+
+
+```{r 31}
+D_matrix <- function(n){
+  # num of non-redundant elements
+  len <- n*(n+1)/2
+  #create a random vech(A) from [0,1] vals
+  vech <- runif(len, min = 0, max = 1)
+  # Create the symm nxn matrix A from the vech(A)
+  A <- matrix(0,n,n)
+  A[lower.tri(A, diag = TRUE)] <- vech
+  A[upper.tri(A)] <- t(A)[upper.tri(A)]
+  #compare elements of the vec(A) and vech(A), which results in the matrix D
+  outer(c(A), vech, `==`) * 1
+}
+D_matrix(3)
+```
+
+## Exercise 32
+Let D_n be the duplication matrix then we can look at them by calling
+
+```{r 32}
+#Example for a 3x3 matrix A
+svd(D_matrix(3))$d
+
+#Example for a 4x4 matrix A
+svd(D_matrix(4))$d
+
+
+#matrix U of the SVD
+svd(D_matrix(4))$u
+
+#matrix V of the SVD
+svd(D_matrix(4))$v
+```
+Note that apparently D_n has n*(n+1)/2 mutually orthogonal columns. We can also see that the SVD has n(n-1)/2 (notice the minus here!) times the singular value of $\sqrt(2)$ and n times the singular value of 1.
+
+## Exercise 33
+We see that the question is similar to Exercise 31, only here the L- matrix is multiplied by the vec(A) to get the vech(A), for any nxn matrix A, so it does not have to be symmetric.
+That means we generate some random unique values for the vech(A) and then create the A as the lower triangular of the vech(A) and then do the outer but in reverse order (since we want to multiply the L matrix with vec(A)).
+
+```{r 33}
+
+L_matrix <- function(n){
+  A <- diag(n)
+  len <- n*(n+1)/2
+  #create a random vech(A) from [0,1] vals
+  vech <- runif(len, min = 0, max = 1)
+  A[lower.tri(A,diag=TRUE)] <- vech
+  return(outer(vech,c(A),`==`) * 1)
+}
+L_matrix(3)
+
+```
+
+## Exercise 34
+The SVD of the L matrix is given below:
+
+```{r 34}
+#Example for a 4x4 matrix A
+svd(L_matrix(4))$d
+
+svd(L_matrix(4))$v
+
+svd(L_matrix(4))$u
+```
+As we can see all of the singular values (n*(n+1)/2) of the L matrix are 1. For the case of n=4 that means 10 singular values of 1.
+The \( U \) matrix is the identity matrix, suggesting that the rows of the \( L \)-matrix are already orthonormal. This means \( U \) does not rotate or transform the basis of the range space of \( L \).
+The \( D \) matrix contains singular values, all equal to 1.
+
+
+## Exercise 35
+```{r}
+exercise_35 <- function(m,n){
+  K <- matrix(0, m*n, m*n)
+  
+  for(i in 1:m){
+    
+    for(j in 1:n){
+      K_column <- i + m * (j- 1)
+      K_row <- j + n * (i- 1)
+      
+      K[K_row, K_column] <- 1
+    }
+  }
+
+  return(K)
+}
+exercise_35(2,3)
+```
+
+## Exercise 36
+```{r}
+#for this we can use exercise 35
+svd(exercise_35(3,2))
+svd(exercise_35(2,2))
+svd(exercise_35(2,3))
+```
+Given the commutation matrix $K_{mn}$ from Exercise 35, its singular values $\sigma_{j}$ correspond to eigenvalues of $K_{mn}'K_{mn}$: 
+
+$K_{mn}'K_{mn}V=A'A[v_{1},...,v_{n}]$, $K_{mn}'K_{mn}V=VD^{2}V′V=VD^{2}=[v_{1},...,v_{n}]*diag(\sigma_{1}^{2},...,\sigma_{n}^{2})$
+
+This implies that, $\forall j K_{mn}'K_{mn}v_{j}=\sigma_{j}^{2}v_{j}$, and that therefore $\sigma_{j}$ are singular values.As shown by the code above, $\forall m,n\ \ \sigma=(1,1,...,1)$. The reason for this is the orthogonality of $K_{mn}$.
+
+## Exercise 37
+
+```{r}
+#The Moon-Penrose inverse relates to the SVD by the following: Moon-Penrose /A+/ = V %*% D+ %*% t(U), where D+ is the diagonal matrix where all the non-zero entries have been inverted
+
+exercise_37 <- function(A, tol){
+  
+    # This function would be used to compute D+
+    helper_function <- function(x, tol){
+      if(x <= tol){
+        return(0)
+      }else{
+        return(1/x)
+      }
+    }
+  
+    svd_decomposition <- svd(A)
+    U <- svd_decomposition$u
+    D <- svd_decomposition$d
+    V_t <- svd_decomposition$v
+    V <- t (V_t)
+    
+    D_plus <- diag(sapply(D, function(x) helper_function(x, tol)))
+    A_plus <- V %*% D_plus %*% t(U)
+    return(A_plus)
+}
+exercise_37(matrix(seq(1,16), 4, 4), 1e-6)
+```
+
+
+
+## Exercise 38
+
+Given a matrix $A$ and a diagonizable vector $w$, $A'diag(w)A$ can be written as:
+
+$A'diag(w)A = diag(w)(A')'A'= diag(w)AA'$
+
+This implies that:
+
+$trace(A'diag(w)A)=trace(diag(w)AA')=\sum_{i}[diag(w)AA']_{ii}=\sum_{i} w_{i}\sigma_{ik}[AA']_{ii}= \sum_{i} w_{i}\sigma_{ik}\sum_{k}[A]_{ik}[A']_{ki}=\sum_{i}\sum_{k} w_{i}a^{2}_{ki}$
+
+```{r}
+wcptrace <- function(A,w) sum(w %*% A^2)
+A <- matrix(c(5,7,2,9,1,4), ncol=2)
+w <- c(1,2,3)
+wcptrace(A,w)
+B<-matrix(c(4,2,3,4,1,2), ncol=2)
+wcptrace(B,c(2,3,1))
+```
+## Exercise 39
+The `dmvnorm` function computes the multivariate normal density for a set of observations \( x \), given:
+- \( m \): the mean vector,
+- \( V \): the covariance matrix.
+
+The density function is defined as:
+\[
+f(x_i) = \frac{1}{\sqrt{(2\pi)^k |\Sigma|}} \exp\left(-\frac{1}{2} (x_i - \mu)' \Sigma^{-1} (x_i - \mu)\right),
+\]
+where:
+- \( k \) is the number of dimensions of \( x \),
+- \( |\Sigma| \) is the determinant of the covariance matrix,
+- The exponent involves the Mahalanobis distance \( (x_i - \mu)' \Sigma^{-1} (x_i - \mu) \), which measures how far each observation is from the mean, scaled by \( \Sigma \).
+
+```{r}
+dmvnorm <- function(x, m, V){
+    denominator <- (prod(eigen(V)$values * 2 * pi)) ^ -0.5
+    power <- apply(x, 1, function(xi) {
+        diff <- xi - m
+        t(diff) %*% solve(V) %*% diff
+    })
+    result <- denominator* exp(-0.5 * power)
+    return(result)
+}
+dmvnorm(matrix(c(0, 0, 1, 2, -1, -1), nrow=3, byrow=TRUE), c(0, 0), matrix(c(1, 0.5, 0.5, 1),2, 2))
+x<-matrix(1:4,2,2)
+m<-c(1,0.5)
+V<-matrix(c(3,2,2,3),2,2)
+dmvnorm(x,m,V)
+```
