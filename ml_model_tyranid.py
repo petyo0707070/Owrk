@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import BaggingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 import scipy.stats as ss
@@ -57,7 +56,22 @@ def main(df, differentiate_bool=False, eth=False):
     df1["tick_direction"] = df1["t1"].apply(lambda x: df.loc[x, "tick_direction"])
     df1['buy_last_10_trades'] = df1["t1"].apply(lambda x: df['direction'].loc[float(int(x) - 10): x].sum())
 
+
+    print(df1.columns)
+
+    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_market_deviation", "volume_last 10 trades", "buy last 10 trades"]]
+
     print(df1.groupby("bin").size())
+
+    best_performer_per_feature = generate_model_proposals(model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=False,
+                                           class_weight='balanced_subsample',
+                                           min_weight_fraction_leaf=0.05, n_jobs = 1),
+                                            X = features_list[0 : int(0.64 * len(features_list))],
+                                            y = df1["bin"][0: 0.64 * len(df1)],
+                                            max_n_features = 5)
+
+    print(best_performer_per_feature)
+
 
     # This one is useful if you want to add a feature and you calculate it on the initial stationary series this maps the feature onto the dataset witj the events
     # df1["hawkes"] = df1["t1"].apply(lambda x: stationary_series.loc[x, "hawkes"])
@@ -68,7 +82,7 @@ def main(df, differentiate_bool=False, eth=False):
     #                                                         'price_mark_price_deviation', 'volume_last_10_trades']],
     #                                                    df1['bin'], test_size=0.36, shuffle=False)
 
-    X_train, X_validation_test, y_train, y_validation_test = train_test_split(df1[["buy_last_10_trades", "volume_last_10_trades", "ret last 10"]], df1['bin'], test_size=0.36, shuffle=False)
+    X_train, X_validation_test, y_train, y_validation_test = train_test_split(features_list, df1['bin'], test_size=0.36, shuffle=False)
 
 
     X_validation, X_test, y_validation, y_test = train_test_split(X_validation_test, y_validation_test, test_size = 0.5, shuffle= False)
@@ -157,7 +171,6 @@ def main(df, differentiate_bool=False, eth=False):
         df_train['result'].plot(kind='line', title='Returns of the RF Bagged Model on the training set')
         plt.show()
 
-
         sys.exit()
 
         # This shows the performance of our model on the validation dataset
@@ -174,9 +187,56 @@ def main(df, differentiate_bool=False, eth=False):
         df_validation['result'].plot(kind='line', title='Returns of the RF Bagged Model on the validation set')
         plt.show()
 
+        sys.exit()
+
         return df_train, df_validation
 
     random_forest(2)
+
+
+
+# Evaluates a model using a walk-forward test
+def evaluate_model(model, X, y):
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    cv = StratifiedKFold(n_splits = 10)
+    score = cross_val_score(model, X, y, scoring = "precision", cv = cv, n_jobs = 16, error_score = "raise")
+    print(score)
+
+    return score
+
+def generate_model_proposals(model, X, y, max_n_features = 5):
+    from sklearn.feature_selection import RFE
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.pipeline import Pipeline
+
+    model_dict = dict()
+
+    model_result_dict = dict()
+
+    # This picks models based on numbers of features
+    for i in range(2, max_n_features + 1):
+        rfe = RFE(estimator=DecisionTreeClassifier(), n_features_to_select= i)
+        model_dict[str(i)] = Pipeline(steps = [("s", rfe), ("m", model)])
+
+   # This evaluates every optimal model for a given n features
+    for name, model in model_dict.items:
+        score = evaluate_model(model, X, y)
+
+        model_result_dict[name] = score
+
+
+    return model_result_dict
+
+
+
+
+def plot_correlation_matrix(df):
+    import seaborn as sns
+    corr = df.corr(method = "kendall")
+    sns.heatmap(corr, xticklabels=corr.columns.values, yticklabels=corr.columns.values, annot = True, fmt = ".2f", cmap = "coolwarm")
+    plt.show()
+
+
 
 
 # This makes a series stationary
@@ -293,9 +353,9 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
         # calculates the return of the 5 candles before the event was confirmed, will try to use it as a feature
         # df2 = close.iloc[max(starting_row - 6, 0): starting_row]
         df2 = close.iloc[max(starting_row - 10, 0): starting_row]
-        df2 = (df2 / close.iloc[max(starting_row - 5, 0)] - 1)
+        df2 = (df2 / close.iloc[max(starting_row - 10, 0)] - 1)
 
-        return_last_5 = df2.iloc[-1]
+        return_last_n = df2.iloc[-1]
 
         # Both SL and TP hit but TP was first
         if ((df0 > pt[loc]).any() and (df0 < sl[loc]).any() and (df0 < pt[loc]).idxmax() < (df0 > sl[loc]).idxmax()):
@@ -314,13 +374,15 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_pt_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
 
-            out.loc[loc, "ret"] = df0.loc[index_pt_hit]
+
+            # Very important deduct fees from the reutrn :))))
+            out.loc[loc, "ret"] = df0.loc[index_pt_hit] - out.loc[loc, 'fees']
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
             # print(f"Price is {close.loc[index_pt_hit]}, after fees {close.loc[index_pt_hit] - 0.001 if close.loc[index_pt_hit] > 0.01 else 0.0005}")
 
-            out.loc[loc, 'bin'] = 1
-            #out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"] - out.loc[loc, 'fees']) > 0 else 0
+            #out.loc[loc, 'bin'] = 1
+            out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
             out.loc[loc, 'end'] = index_pt_hit
 
 
@@ -338,12 +400,12 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_sl_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
 
-            out.loc[loc, "ret"] = df0.loc[index_sl_hit]
+            out.loc[loc, "ret"] = df0.loc[index_sl_hit] + out.loc[loc, 'fees']
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            out.loc[loc, 'bin'] = -1
-            #out.loc[loc, 'bin'] = -1 if (out.loc[loc, "fees"] + out.loc[loc, 'ret']) < 0 else 0
+            #out.loc[loc, 'bin'] = -1
+            out.loc[loc, 'bin'] = -1 if (out.loc[loc, 'ret']) < 0 else 0
             out.loc[loc, 'end'] = index_sl_hit
 
 
@@ -360,12 +422,12 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_pt_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
 
-            out.loc[loc, "ret"] = df0.loc[index_pt_hit]
+            out.loc[loc, "ret"] = df0.loc[index_pt_hit] - out.loc[loc, 'fees']
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            out.loc[loc, 'bin'] = 1
-            #out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"] - out.loc[loc, 'fees']) > 0 else 0
+            #out.loc[loc, 'bin'] = 1
+            out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
             out.loc[loc, 'end'] = index_pt_hit
 
 
@@ -384,12 +446,13 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_sl_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
 
-            out.loc[loc, "ret"] = df0.loc[index_sl_hit]
+            out.loc[loc, "ret"] = df0.loc[index_sl_hit] + out.loc[loc, 'fees']
+
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            #out.loc[loc, 'bin'] = -1 if (out.loc[loc, "ret"] + out.loc[loc, 'fees']) < 0 else 0
-            out.loc[loc, "bin"] = -1
+            out.loc[loc, 'bin'] = -1 if (out.loc[loc, "ret"]) < 0 else 0
+            #out.loc[loc, "bin"] = -1
 
             out.loc[loc, 'end'] = index_sl_hit
 
@@ -409,11 +472,11 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
         out.loc[loc, 'start'] = loc
         out.loc[loc, 'volatility'] = events_.loc[int(loc), 'trgt']
-        out.loc[loc, 'ret last 10'] = return_last_5
+        out.loc[loc, 'ret last 10'] = return_last_n
 
     # Since there was an issue where the random forest produced only 1.0 predictions, I found out that
     # OF COURSE IT WOULD NOT all the returns for bin = -1 are negative and not multiplied by their direction
-    out["ret_train"] = out["ret"].apply(lambda x: abs(x))
+    #out["ret_train"] = out["ret"].apply(lambda x: abs(x))
     return out
 
 
