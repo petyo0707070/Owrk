@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import sys
-from copulas.multivariate import GaussianMultivariate
-from copulas.visualization import scatter_2d
-from copulas.datasets import sample_bivariate_age_income
+from copulae.elliptical import StudentCopula
+import plotly.graph_objs as go
+
 
 
 def main():
@@ -61,21 +61,28 @@ def main():
 
     iygb["U"] = iygb["return"].apply(lambda x: cdf_iygb(x))
     qw9a["U"] = qw9a["return"].apply(lambda x: cdf_qw9a(x))
-    df = pd.merge(iygb["return"], qw9a["return"], left_index=True, right_index=True)
-    print(df)
 
-    #copula = GaussianMultivariate()
-    #copula.fit(df)
+    df = pd.merge(iygb["U"], qw9a["U"], left_index=True, right_index=True)
 
-    df = sample_bivariate_age_income()
-    scatter_2d(df)
+    """
+    cdf_iygb_prices = ECDF(iygb["PX_LAST"].values)
+    cdf_qw9a_prices = ECDF(qw9a["PX_LAST"].values)
+    iygb["U_1"] = iygb["PX_LAST"].apply(lambda x: cdf_iygb_prices(x))
+    qw9a["U_1"] = qw9a["PX_LAST"].apply(lambda x: cdf_qw9a_prices(x))
+    plt.scatter(iygb["U_1"], qw9a["U_1"])
+    plt.title("Scatterplot prices")
     plt.show()
-
-
-
-
     sys.exit()
-    evaluate_correlation_dependence(iygb, qw9a)
+    """
+
+    copula = StudentCopula()
+    copula.fit(df)
+    print(copula.params)
+    print(copula.log_lik(df))
+
+
+
+
 
 
     # The 2 indexes are almost 1:1 correlated
