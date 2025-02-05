@@ -16,8 +16,11 @@ from sklearn.metrics import precision_recall_fscore_support as score
 
 def main(df, differentiate_bool=False, eth=False):
 
-    print(df)
+    df["abnormal_trade_conditions"] = np.where( (df["block_trade_id"].isnull()) |
+                                                (df["combo_trade_id"].isnull()) |
+                                                (df["liquidation"].isnull()), True, False)
     df["direction"] = df["direction"].apply(lambda x: 1 if x == 'buy' else 0)
+    df["index_return"] = df["index_price"].diff() / df["index_price"].shift(1)
     if differentiate_bool:
         differentiator = plotMinFFD(df)
         stationary_series = fracDiff_FFD(np.log(df[['close']]), differentiator, 1e-4 / 2)
@@ -35,13 +38,13 @@ def main(df, differentiate_bool=False, eth=False):
     sigma = sigma.dropna()
     stationary_series = stationary_series[stationary_series.index.isin(sigma.index)]
 
-    events = getTEvents(stationary_series['price'], 2 * sigma)
+    events = getTEvents(stationary_series['price'], 3.5 * sigma)
 
     t1 = stationary_series['price'].index.searchsorted(events + 100)
     t1 = t1[t1 < stationary_series['price'].shape[0]]
     t1 = pd.Series(stationary_series['price'].index[t1], index=events[:t1.shape[0]])
 
-    df1 = getEvents(stationary_series['price'], events, [0.25, 0.25], 2 * sigma, 0.004, 48, t1, None, eth=eth)
+    df1 = getEvents(stationary_series['price'], events, [0.5, 0.5], 3.5 * sigma, 0.004, 48, t1, None, eth=eth)
 
     # Insures that there are no overlapping trades
     df1 = df1.sort_values(by='end', ascending=True)
@@ -55,26 +58,25 @@ def main(df, differentiate_bool=False, eth=False):
     df1['volume_last_10_trades'] = df1["t1"].apply(lambda x: df['contracts'].loc[float(int(x) - 10): x].sum())
     df1["tick_direction"] = df1["t1"].apply(lambda x: df.loc[x, "tick_direction"])
     df1['buy_last_10_trades'] = df1["t1"].apply(lambda x: df['direction'].loc[float(int(x) - 10): x].sum())
+    df1["index_return"] = df1["t1"].apply(lambda x: df.loc[x, "index_return"])
+    df1["abnormal_trade_conditions"] = df1["t1"].apply(lambda x: df.loc[x, "abnormal_trade_conditions"])
 
 
-    print(df1.columns)
 
-    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_market_deviation", "volume_last 10 trades", "buy last 10 trades"]]
+    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "abnormal_trade_conditions"]]
 
     print(df1.groupby("bin").size())
 
-    best_performer_per_feature = generate_model_proposals(model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=False,
-                                           class_weight='balanced_subsample',
-                                           min_weight_fraction_leaf=0.05, n_jobs = 1),
-                                            X = features_list[0 : int(0.64 * len(features_list))],
-                                            y = df1["bin"][0: 0.64 * len(df1)],
-                                            max_n_features = 5)
+    #best_performer_per_feature = generate_model_proposals(model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=False,
+    #                                       class_weight='balanced_subsample',
+    #                                       min_weight_fraction_leaf=0.05, n_jobs = 1),
+    #                                        X = features_list[0 : int(0.64 * len(features_list))],
+    #                                        y = df1["bin"][0: int(0.64 * len(df1))],
+    #                                        max_n_features = 5)
 
-    print(best_performer_per_feature)
+    #print(best_performer_per_feature)
 
 
-    # This one is useful if you want to add a feature and you calculate it on the initial stationary series this maps the feature onto the dataset witj the events
-    # df1["hawkes"] = df1["t1"].apply(lambda x: stationary_series.loc[x, "hawkes"])
 
     # This implements PCA / Principal Component Analysis/ even before we train the model in an attempt to make it less overfit
 
@@ -124,11 +126,15 @@ def main(df, differentiate_bool=False, eth=False):
             model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=False,
                                            class_weight='balanced_subsample',
                                            min_weight_fraction_leaf=0.05, n_jobs = 1)
-            model = BaggingClassifier(estimator=model, n_estimators=1000, max_samples=avgU)  # , max_features=1.)
+            model = BaggingClassifier(estimator=model, n_estimators = 100, max_samples=avgU)  # , max_features=1.)
 
         # stratified_kfold = StratifiedKFold(n_splits=10, shuffle=False)
         # cross_score = cross_val_score(model, X_train, y_train, cv=stratified_kfold, scoring="f1")
         # print(f"Cross-validation score for the random-forest model is {np.mean(cross_score)}")
+
+        walk_forward_result = evaluate_model(model, X_train, y_train)
+        print(f"The result of the walk forward are {walk_forward_result}")
+
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_validation)
@@ -171,7 +177,7 @@ def main(df, differentiate_bool=False, eth=False):
         df_train['result'].plot(kind='line', title='Returns of the RF Bagged Model on the training set')
         plt.show()
 
-        sys.exit()
+
 
         # This shows the performance of our model on the validation dataset
         y_pred_validation = model.predict(X_validation)
@@ -198,9 +204,12 @@ def main(df, differentiate_bool=False, eth=False):
 # Evaluates a model using a walk-forward test
 def evaluate_model(model, X, y):
     from sklearn.model_selection import StratifiedKFold, cross_val_score
-    cv = StratifiedKFold(n_splits = 10)
-    score = cross_val_score(model, X, y, scoring = "precision", cv = cv, n_jobs = 16, error_score = "raise")
-    print(score)
+
+    model.fit(X, y)
+
+
+    cv = StratifiedKFold(n_splits = 5)
+    score = cross_val_score(model, X, y, scoring = "precision_weighted", cv = cv, n_jobs = 16, error_score = "raise")
 
     return score
 
@@ -218,10 +227,11 @@ def generate_model_proposals(model, X, y, max_n_features = 5):
         rfe = RFE(estimator=DecisionTreeClassifier(), n_features_to_select= i)
         model_dict[str(i)] = Pipeline(steps = [("s", rfe), ("m", model)])
 
-   # This evaluates every optimal model for a given n features
-    for name, model in model_dict.items:
-        score = evaluate_model(model, X, y)
 
+   # This evaluates every optimal model for a given n features
+    for name, model in model_dict.items():
+
+        score = evaluate_model(model, X, y)
         model_result_dict[name] = score
 
 
@@ -472,7 +482,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
         out.loc[loc, 'start'] = loc
         out.loc[loc, 'volatility'] = events_.loc[int(loc), 'trgt']
-        out.loc[loc, 'ret last 10'] = return_last_n
+        out.loc[loc, 'ret_last_10'] = return_last_n
 
     # Since there was an issue where the random forest produced only 1.0 predictions, I found out that
     # OF COURSE IT WOULD NOT all the returns for bin = -1 are negative and not multiplied by their direction
@@ -771,7 +781,7 @@ if __name__ == '__main__':
     # Normal Test
     df = pd.read_csv("btc_27_12_call_100000.csv", parse_dates=True)
 
-    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts']][0:]
+    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts', "block_trade_id", "combo_trade_id", "liquidation"]][0:]
 
     main(df, eth=False)
 
