@@ -16,9 +16,20 @@ from sklearn.metrics import precision_recall_fscore_support as score
 
 def main(df, differentiate_bool=False, eth=False):
 
+    # Abnormal trade conditions are defined as anything that is either a liquidation, block or combo trade
     df["abnormal_trade_conditions"] = np.where( (df["block_trade_id"].isnull()) |
                                                 (df["combo_trade_id"].isnull()) |
                                                 (df["liquidation"].isnull()), True, False)
+
+
+
+    # Ensuring that timestamp is in datetime format
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # The time since last trade in seconds
+    df["time_elapsed"] = df["timestamp"].diff().dt.total_seconds()
+
+
+    print(df)
     df["direction"] = df["direction"].apply(lambda x: 1 if x == 'buy' else 0)
     df["index_return"] = df["index_price"].diff() / df["index_price"].shift(1)
     if differentiate_bool:
@@ -31,39 +42,43 @@ def main(df, differentiate_bool=False, eth=False):
 
     # Calculate the exponentially weighted volatility of the past 100 trades
     df0 = stationary_series / stationary_series.shift(1) - 1  # returns
-    sigma = df0.ewm(span=100).std()
+    sigma = df0.ewm(span=500).std()
 
     # We drop the na values and select the rows from the stationary series which are the ones
     # which did not get dropped
     sigma = sigma.dropna()
     stationary_series = stationary_series[stationary_series.index.isin(sigma.index)]
 
-    events = getTEvents(stationary_series['price'], 3.5 * sigma)
+    events = getTEvents(stationary_series['price'], 2.5 * sigma)
 
     t1 = stationary_series['price'].index.searchsorted(events + 100)
     t1 = t1[t1 < stationary_series['price'].shape[0]]
     t1 = pd.Series(stationary_series['price'].index[t1], index=events[:t1.shape[0]])
 
-    df1 = getEvents(stationary_series['price'], events, [0.5, 0.5], 3.5 * sigma, 0.004, 48, t1, None, eth=eth)
+    df1 = getEvents(stationary_series['price'], events, [0.5 , 0.5], 10 * sigma, 0.001, 48, t1, None, eth=eth)
 
     # Insures that there are no overlapping trades
     df1 = df1.sort_values(by='end', ascending=True)
     df1 = df1[df1['start'] > df1['end'].shift(1)]
     df1 = df1.reset_index(drop=True)
 
-    df1['iv_last_trade'] = df1["t1"].apply(lambda x: df.loc[x, "iv"])
-    df1['buy'] = df1["t1"].apply(lambda x: df.loc[x, "direction"])
-    df1['price_mark_price_deviation'] = df1["t1"].apply(
+    print(df1)
+
+    df1['iv_last_trade'] = df1["start"].apply(lambda x: df.loc[x, "iv"])
+    df1['buy'] = df1["start"].apply(lambda x: df.loc[x, "direction"])
+    df1['price_mark_price_deviation'] = df1["start"].apply(
         lambda x: (df.loc[x, "price"] - df.loc[x, 'mark_price']) / df.loc[x, 'price'])
-    df1['volume_last_10_trades'] = df1["t1"].apply(lambda x: df['contracts'].loc[float(int(x) - 10): x].sum())
-    df1["tick_direction"] = df1["t1"].apply(lambda x: df.loc[x, "tick_direction"])
-    df1['buy_last_10_trades'] = df1["t1"].apply(lambda x: df['direction'].loc[float(int(x) - 10): x].sum())
-    df1["index_return"] = df1["t1"].apply(lambda x: df.loc[x, "index_return"])
-    df1["abnormal_trade_conditions"] = df1["t1"].apply(lambda x: df.loc[x, "abnormal_trade_conditions"])
+    df1['volume_last_10_trades'] = df1["start"].apply(lambda x: df['contracts'].loc[float(int(x) - 10): x].sum())
+    df1["tick_direction"] = df1["start"].apply(lambda x: df.loc[x, "tick_direction"])
+    df1['buy_last_10_trades'] = df1["start"].apply(lambda x: df['direction'].loc[float(int(x) - 10): x].sum())
+    df1["index_return"] = df1["start"].apply(lambda x: df.loc[x, "index_return"])
+    df1["abnormal_trade_conditions"] = df1["start"].apply(lambda x: df.loc[x, "abnormal_trade_conditions"])
+    df1["time_elapsed"] = df1["start"].apply(lambda x: df.loc[x, "time_elapsed"])
 
 
 
-    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "abnormal_trade_conditions"]]
+
+    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "abnormal_trade_conditions", "time_elapsed" ]]
 
     print(df1.groupby("bin").size())
 
@@ -178,12 +193,11 @@ def main(df, differentiate_bool=False, eth=False):
         plt.show()
 
 
-
         # This shows the performance of our model on the validation dataset
         y_pred_validation = model.predict(X_validation)
         result_validation = y_pred_validation == y_validation
         precision_validation, recall_validation, fscore_validation, support_validation = score(y_validation, y_pred_validation)
-        print(f"Precision for the training set is {precision_validation}")
+        print(f"Precision for the validation set is {precision_validation}")
         df_validation = df1.loc[y_validation.index]
         df_validation["bool"] = result_validation
         df_validation["prediction"] = y_pred_validation
@@ -193,9 +207,27 @@ def main(df, differentiate_bool=False, eth=False):
         df_validation['result'].plot(kind='line', title='Returns of the RF Bagged Model on the validation set')
         plt.show()
 
+
+        # This shows the performance of our model on the test dataset
+        y_pred_test = model.predict(X_test)
+        result_test = y_pred_test == y_test
+        precision_test, recall_test, fscore_test, support_test = score(y_test, y_pred_test)
+        print(f"Precision for the test set is {precision_test}")
+        df_test = df1.loc[y_test.index]
+        df_test["bool"] = result_test
+        df_test["prediction"] = y_pred_test
+        df_test["result"] = np.where(df_test['prediction'] == 1, (df_test['ret'] * 1 + 1),
+                                      np.where(df_test['prediction'] == - 1, ((df_test['ret'] * - 1) + 1), 1))
+        df_test['result'] = df_test['result'].cumprod()
+        df_test['result'].plot(kind='line', title='Returns of the RF Bagged Model on the test set')
+        plt.show()
+
+
+        save_model(model)
+
         sys.exit()
 
-        return df_train, df_validation
+        return df_train, df_validation, df_test
 
     random_forest(2)
 
@@ -238,6 +270,9 @@ def generate_model_proposals(model, X, y, max_n_features = 5):
     return model_result_dict
 
 
+def save_model(model):
+    import joblib
+    joblib.dump(model, "tyranid_fitted_light.pkl")
 
 
 def plot_correlation_matrix(df):
@@ -349,6 +384,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
     else:
         sl = pd.Series(index=events.index)  # NaNs
 
+
     for loc, t1 in events_['t1'].items():  # fillna(close.index[-1]).items():
 
         df0 = close[int(loc):int(t1)]  # path prices
@@ -371,7 +407,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
         if ((df0 > pt[loc]).any() and (df0 < sl[loc]).any() and (df0 < pt[loc]).idxmax() < (df0 > sl[loc]).idxmax()):
 
             index_pt_hit = (df0 > pt[loc]).idxmax()
-            # print(f"The indes of the first hit PT is {index_pt_hit}, the range is {loc} - {t1}, it took {index_pt_hit - loc} trades")
+            #print(f"The indes of the first hit PT is {index_pt_hit}, the range is {loc} - {t1}, it took {index_pt_hit - loc} trades")
 
             # out.loc[loc, "ret"] = df0.loc[index_pt_hit]
 
@@ -391,8 +427,8 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
             # print(f"Price is {close.loc[index_pt_hit]}, after fees {close.loc[index_pt_hit] - 0.001 if close.loc[index_pt_hit] > 0.01 else 0.0005}")
 
-            #out.loc[loc, 'bin'] = 1
-            out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
+            out.loc[loc, 'bin'] = 1
+            #out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
             out.loc[loc, 'end'] = index_pt_hit
 
 
@@ -401,7 +437,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             index_sl_hit = (df0 < sl[loc]).idxmax()
 
-            # print(f"The indes of the first hit SL is {index_sl_hit}, the range is {loc} - {t1}, it took {index_sl_hit - loc} trades")
+            #print(f"The indes of the first hit SL is {index_sl_hit}, the range is {loc} - {t1}, it took {index_sl_hit - loc} trades")
 
             if eth == False:
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_sl_hit] > 0.01 else 0.0005 / close.loc[
@@ -414,8 +450,8 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            #out.loc[loc, 'bin'] = -1
-            out.loc[loc, 'bin'] = -1 if (out.loc[loc, 'ret']) < 0 else 0
+            out.loc[loc, 'bin'] = -1
+            #out.loc[loc, 'bin'] = -1 if (out.loc[loc, 'ret']) < 0 else 0
             out.loc[loc, 'end'] = index_sl_hit
 
 
@@ -423,7 +459,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
         elif ((df0 > pt[loc]).any()):
 
             index_pt_hit = (df0 > pt[loc]).idxmax()
-            # print(f"The indes of the first hit PT is {index_pt_hit}, the range is {loc} - {t1}, it took {index_pt_hit - loc} trades")
+            #print(f"The indes of the first hit PT is {index_pt_hit}, the range is {loc} - {t1}, it took {index_pt_hit - loc} trades")
 
             if eth == False:
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_pt_hit] > 0.01 else 0.0005 / close.loc[
@@ -436,8 +472,8 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            #out.loc[loc, 'bin'] = 1
-            out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
+            out.loc[loc, 'bin'] = 1
+            #out.loc[loc, 'bin'] = 1 if (out.loc[loc, "ret"]) > 0 else 0
             out.loc[loc, 'end'] = index_pt_hit
 
 
@@ -447,7 +483,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
         elif (df0 < sl[loc]).any():
             index_sl_hit = (df0 < sl[loc]).idxmax()
 
-            # print(f"The indes of the first hit SL is {index_sl_hit}, the range is {loc} - {t1}, it took {index_sl_hit - loc} trades")
+            #print(f"The indes of the first hit SL is {index_sl_hit}, the range is {loc} - {t1}, it took {index_sl_hit - loc} trades")
 
             if eth == False:
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_sl_hit] > 0.01 else 0.0005 / close.loc[
@@ -461,8 +497,8 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
-            out.loc[loc, 'bin'] = -1 if (out.loc[loc, "ret"]) < 0 else 0
-            #out.loc[loc, "bin"] = -1
+            #out.loc[loc, 'bin'] = -1 if (out.loc[loc, "ret"]) < 0 else 0
+            out.loc[loc, "bin"] = -1
 
             out.loc[loc, 'end'] = index_sl_hit
 
