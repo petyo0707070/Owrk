@@ -7,7 +7,7 @@ from copulae.elliptical import StudentCopula
 from copulae.archimedean import GumbelCopula, ClaytonCopula, FrankCopula
 import plotly.graph_objs as go
 import seaborn as sns
-
+pd.options.mode.chained_assignment = None
 
 def main():
 
@@ -20,18 +20,6 @@ def main():
     iygj = iygj.dropna()
     qw9a = qw9a.dropna()
 
-    #Split the data 64% for training, 18 % for validation and 18% for testing
-    iygj_validation_test = iygj[int(0.64 * len(iygj)):]
-    iygj_validation = iygj_validation_test[:int(0.5 * len(iygj_validation_test))]
-    iygj_test = iygj_validation_test[int(0.5 * len(iygj_validation_test)):]
-    del iygj_validation_test
-    iygj = iygj[:int(0.64 * len(iygj))]
-
-    qw9a_validation_test = qw9a[int(0.64 * len(qw9a)):]
-    qw9a_validation = qw9a_validation_test[:int(0.5 * len(qw9a_validation_test))]
-    qw9a_test = qw9a_validation_test[int(0.5 * len(qw9a_validation_test)):]
-    del qw9a_validation_test
-    qw9a = qw9a[:int(0.64 * len(qw9a))]
 
 
     # Drop the dates that are present only in one of the two dataframes
@@ -53,59 +41,47 @@ def main():
     qw9a = qw9a.dropna()
 
 
-    #plot_probability_distributions(iygj["SP039"], qw9a["SP039"])
+    #Split the data 64% for training, 18 % for validation and 18% for testing
+    iygj_validation_test = iygj[int(0.64 * len(iygj)):]
+    iygj_validation = iygj_validation_test[:int(0.5 * len(iygj_validation_test))]
+    iygj_test = iygj_validation_test[int(0.5 * len(iygj_validation_test)):]
+    del iygj_validation_test
+    iygj = iygj[:int(0.64 * len(iygj))]
 
-    # This fits a cdf for the empirical distribution of the training sets for the 2 indexes
-    cdf_iygj = ECDF(iygj["SP039"].values)
-    cdf_qw9a = ECDF(qw9a["SP039"].values)
-
-    # The idea of the copula strategy is to go long A and short B
-    # when cdf(A) = 5% and cdf(B) = 95% and vice versa, percentages are subject to the
-    # confidence level we choose
-
-    iygj["U"] = iygj["SP039"].apply(lambda x: cdf_iygj(x))
-    qw9a["U"] = qw9a["SP039"].apply(lambda x: cdf_qw9a(x))
-
-    df = pd.merge(iygj["U"], qw9a["U"], left_index=True, right_index=True)
+    qw9a_validation_test = qw9a[int(0.64 * len(qw9a)):]
+    qw9a_validation = qw9a_validation_test[:int(0.5 * len(qw9a_validation_test))]
+    qw9a_test = qw9a_validation_test[int(0.5 * len(qw9a_validation_test)):]
+    del qw9a_validation_test
+    qw9a = qw9a[:int(0.64 * len(qw9a))]
 
 
-    """
-    cdf_iygb_prices = ECDF(iygb["PX_LAST"].values)
-    cdf_qw9a_prices = ECDF(qw9a["PX_LAST"].values)
-    iygb["U_1"] = iygb["PX_LAST"].apply(lambda x: cdf_iygb_prices(x))
-    qw9a["U_1"] = qw9a["PX_LAST"].apply(lambda x: cdf_qw9a_prices(x))
-    plt.scatter(iygb["U_1"], qw9a["U_1"])
-    plt.title("Scatterplot prices")
-    plt.show()
-    sys.exit()
-    """
 
-    result = choose_best_copula(df)
-    copula = result["Copula"]
-
-
-    print(copula)
-    print(copula.params)
+    df = pd.merge(iygj["SP039"], qw9a["SP039"], left_index=True, right_index=True)
 
     df['x'] = iygj["SP039"]
     df['y'] = qw9a['SP039']
     df['spread'] = df['x'] - df['y']
 
-    run_training(df, copula)
+    #run_training(df)
 
 
-
-    # This codes will run the validation
-        # First convert the raw values to their quantiles
-    iygj_validation["U"] = iygj_validation["SP039"].apply(lambda x: cdf_iygj(x))
-    qw9a_validation["U"] = qw9a_validation["SP039"].apply(lambda x: cdf_qw9a(x))
 
     # Join the 2 dfs in a single dataframe
-    df_validation = pd.merge(iygj_validation["U"], qw9a_validation["U"], left_index=True, right_index=True)
+    df_validation = pd.merge(iygj_validation["SP039"], qw9a_validation["SP039"], left_index=True, right_index=True)
+    print(df_validation)
     df_validation['x'] = iygj_validation["SP039"]
     df_validation['y'] = qw9a_validation['SP039']
     df_validation['spread'] = df_validation['x'] - df_validation['y']
-    run_training(df_validation, copula)
+    #run_training(df_validation)
+
+
+    # Run on the test dataset
+    df_test = pd.merge(iygj_test["SP039"], qw9a_test["SP039"], left_index=True, right_index=True)
+    print(df_test)
+    df_test['x'] = iygj_test["SP039"]
+    df_test['y'] = qw9a_test['SP039']
+    df_test['spread'] = df_test['x'] - df_test['y']
+    run_training(df_test)
 
     sys.exit()
 
@@ -211,10 +187,10 @@ def choose_best_copula(df):
 
         if copula == StudentCopula:
             temp_copula = copula()
-            temp_copula.fit(data = df, to_pobs= False)
+            temp_copula.fit(data = df, to_pobs= False, verbose = 0)
         else:
             temp_copula = copula()
-            temp_copula.fit(data = df, to_pobs= False)
+            temp_copula.fit(data = df, to_pobs= False, verbose = 0)
 
         if temp_copula.log_lik(df.to_numpy(), to_pobs=False) > highest_likelihood["ML"]:
             highest_likelihood["ML"] = temp_copula.log_lik(df.to_numpy())
@@ -223,9 +199,14 @@ def choose_best_copula(df):
     return highest_likelihood
 
 
-def run_training(df, copula):
+def run_training(df):
 
-    df["Conditional Probability"] = copula.cdf(df[["U_x", "U_y"]])
+
+    #df["Conditional Probability"] = copula.cdf(df[["U_x", "U_y"]])
+
+    df = df[["x", "y", "spread"]]
+
+    df["Date"] = df.index.copy()
 
     # A variable that is -1 if we are short the spread (X - Y, when the conditional probability is <5%)
     # the position is 1 if we are long the spread (X - Y, wihhc is when the conditional probability is 95%)
@@ -237,40 +218,102 @@ def run_training(df, copula):
     # An array that will hold whether the trades were accurate or not
     outcomes = []
 
+    # This will hold the years that have passed intended to be used for the retraining
+    years_passed = []
+
+    # Initiate a variable that will hold the copula, needed as we are operating in a continiously updated for loop
+    copula = None
+    conditional_probability = None
 
     for index, row in df.iterrows():
 
 
-        # Short the spread
-        if position == 0 and row["Conditional Probability"] < 0.05:
-            position = -1
-            index_entered = index
+        # Only append the year when there is no previous year
+        if row["Date"].year not in years_passed and len(years_passed) < 1:
+            years_passed.append(row["Date"].year)
 
-        # long the spread
-        if position == 0 and row["Conditional Probability"] > 0.95:
-            position = 1
-            index_entered = index
+        """"
+        This will be initiated if this is the fist day of the year
+        i.e. needs retraining since we are doing a rolling window
+        """""
+        if row["Date"].year not in years_passed and len(years_passed) >= 1:
 
-        print(f"Right now position is {position} the conditional probability is {row['Conditional Probability']}, spread is {row['spread']} ")
+            pos = df.index.get_loc(index)
+            years_passed.append(row["Date"].year)
 
-        # Close the short spread
-        if position == -1 and row['Conditional Probability'] >=  0.2:
-            position = 0
-            outcomes.append(1 if df.loc[index_entered, "spread"] > row["spread"] else 0)
-            index_entered = 0
+            # This is initiated as vanilla i.e. take the last 252 days /1 trading year/
+            if pos >= 252:
+                temp_df = df.iloc[pos - 252: pos]
+
+            # This will only come into play if it is an year which is in the begining and we do not yet have 252 days
+            else:
+                temp_df = df.iloc[0 : pos]
+
+            print(temp_df)
+
+            # Get the Empirical CDF of the last year
+            cdf_iygj = ECDF(temp_df["x"].values)
+            cdf_qw9a = ECDF(temp_df["y"].values)
+
+            # Get their cdf
+            temp_df["U_x"] = temp_df["x"].apply(lambda x: cdf_iygj(x))
+            temp_df["U_y"] = temp_df["y"].apply(lambda x: cdf_qw9a(x))
+
+            # Select the most appropriate copula
+            result = choose_best_copula(temp_df[["U_x", "U_y"]])
+            copula = result["Copula"]
+
+
+            row["U_x"] = cdf_iygj(row["x"])
+            row["U_y"] = cdf_qw9a(row["y"])
+
+            # Calculate the conditional probability, has to be passed as a dataframe not a series
+            conditional_probability = copula.cdf(pd.DataFrame({
+                                        "U_x": [row["U_x"]],
+                                        "U_y": [row["U_y"]]}))
+
+
+        # The default operation when doing the walk forward
+        if row["Date"].year in years_passed and len(years_passed) >= 2:
+
+            row["U_x"] = cdf_iygj(row["x"])
+            row["U_y"] = cdf_qw9a(row["y"])
+            conditional_probability = copula.cdf(pd.DataFrame({
+                                        "U_x": [row["U_x"]],
+                                        "U_y": [row["U_y"]]}))
+
+
+            # Short the spread
+            if position == 0 and conditional_probability < 0.025:
+                position = 1
+                index_entered = index
+
+            # Long the spread
+            if position == 0 and conditional_probability > 0.975:
+                position = -1
+                index_entered = index
+
+            print(f"Right now position is {position} the conditional probability is {conditional_probability}, spread is {row['spread']} ")
+
+            # Close the short spread
+            if position == -1 and conditional_probability <=  0.5:
+                position = 0
+                outcomes.append(1 if df.loc[index_entered, "spread"] > row["spread"] else 0)
+                index_entered = 0
 
 
 
-        # Close the long spread
-        if position == 1 and row['Conditional Probability'] <= 0.80:
-            position = 0
-            outcomes.append(1 if df.loc[index_entered, "spread"] < row["spread"] else 0)
-            index_entered = 0
+            # Close the long spread
+            if position == 1 and conditional_probability >= 0.50:
+                position = 0
+                outcomes.append(1 if df.loc[index_entered, "spread"] < row["spread"] else 0)
+                index_entered = 0
 
 
 
-    print(df["Conditional Probability"].describe())
     print(outcomes)
+    print(sum(outcomes) / len(outcomes))
+
 
 
 
