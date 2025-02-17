@@ -84,7 +84,7 @@ def main():
 
                 # This will hold the features needed for the ML model
                 features_list = []
-                features_list.append(sigma)
+                features_list.append(10 * sigma)
 
                 # Return of the last 10 trades
                 return_last_10 = (last_500_trades.loc[int(i-1), "price"] - last_500_trades.loc[int(i - 11), "price"]) / last_500_trades.loc[int(i-11), "price"]
@@ -119,13 +119,20 @@ def main():
 
 
                 # time_elapsed
-                print(last_500_trades.loc[i - 1, "timestamp"].timestamp())
                 time_elapsed = last_500_trades.loc[i - 1, "timestamp"].timestamp() - last_500_trades.loc[i-2, "timestamp"].timestamp()
                 features_list.append(time_elapsed)
 
+                X = pd.DataFrame({"volatility": [features_list[0]], 
+                                  "ret_last_10": [features_list[1]], 
+                                  "iv_last_trade": [features_list[2]], 
+                                  "price_mark_price_deviation": [features_list[3]], 
+                                  "volume_last_10_trades": [features_list[4]], 
+                                  "buy_last_10_trades": [features_list[5]], 
+                                  "index_return": [features_list[6]], 
+                                  "abnormal_trade_conditions": [features_list[7]], 
+                                  "time_elapsed": [features_list[8]]})
 
-                features_list.reshape(1, -1)
-                prediction = model.predict(features_list)
+                prediction = model.predict(X)
                 print(prediction)
 
                 """""
