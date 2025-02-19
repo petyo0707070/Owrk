@@ -18,8 +18,8 @@ def main(df, differentiate_bool=False, eth=False):
 
     # Abnormal trade conditions are defined as anything that is either a liquidation, block or combo trade
     df["abnormal_trade_conditions"] = np.where( (df["block_trade_id"].isnull()) |
-                                                (df["combo_trade_id"].isnull()) |
-                                                (df["liquidation"].isnull()), True, False)
+                                                (df["combo_trade_id"].isnull()), True, False)# |
+                                                #(df["liquidation"].isnull()), True, False)
 
 
 
@@ -78,7 +78,7 @@ def main(df, differentiate_bool=False, eth=False):
     df1["time_elapsed"] = df1["start"].apply(lambda x: df.loc[x, "time_elapsed"])
 
     print(df1)
-    #df1.to_csv("comparison.csv", index = False)
+    df1.to_excel("comparison.xlsx", index = False)
 
     # Look to ADD TIME TO EXPIRATION
     # OTM/ATM/ITM
@@ -111,16 +111,10 @@ def main(df, differentiate_bool=False, eth=False):
 
     X_validation, X_test, y_validation, y_test = train_test_split(X_validation_test, y_validation_test, test_size = 0.5, shuffle= False)
 
-    """""
-    append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation, y_test)
-    """""
-    X_train.to_csv("x_train.csv", index = False)
-    y_train.to_csv("y_train.csv", index = False)
-    X_validation.to_csv("x_validation.csv", index = False)
-    y_validation.to_csv("y_validation.csv", index = False)
-    X_test.to_csv("x_test.csv", index = False)
-    y_test.to_csv("y_test.csv", index = False)
 
+    #append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation, y_test)
+
+    sys.exit()
 
     # orthogonal_features_train = orthoFeats(X_train)
     # X_train = pd.DataFrame(orthogonal_features_train, columns=['volatility', 'ret last 5', 'bullish last 5'])
@@ -570,8 +564,6 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
         out.loc[loc, 'start'] = loc
         out.loc[loc, 'volatility'] = events_.loc[int(loc), 'trgt']
-        print(f"Start of the event is {loc}")
-        print(events_)
 
         out.loc[loc, 'ret_last_10'] = return_last_n
 
@@ -870,12 +862,12 @@ def monte_carlo_permutation_generator(df):
 
 if __name__ == '__main__':
     # Normal Test
-    df = pd.read_csv("btc_28_03_2025_call_105000.csv", parse_dates=True)
+    df = pd.read_csv("btc_30_09_2022_call_20000.csv", parse_dates=True)
 
     if "contracts" not in df.columns:
         df["contracts"] = df["amount"]
 
-    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts', "block_trade_id", "liquidation", "combo_trade_id"]]
+    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts', "block_trade_id", "combo_trade_id"]]#, "liquidation"]]
 
     main(df, eth=False)
 

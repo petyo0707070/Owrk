@@ -23,7 +23,7 @@ def main():
     all the results quite a lot. ALSO BUY last_10 is actually the last 11 trades, everything that has last 10 is actually 11 :) somebody can't count
     """""
 
-    model = joblib.load("tyranid_combined.pkl")
+    model = joblib.load("tyranid_combined_full_dataset.pkl")
 
     # These will be used to identify events when they occur
     sPos = 0
@@ -67,7 +67,8 @@ def main():
     exit_approach = "opposite_tick"
 
     # This is the option we are interested in trading
-    df = pd.read_csv("btc_28_03_2025_call_105000.csv")
+    df = pd.read_csv("btc_30_09_2022_call_20000.csv")#df = pd.read_csv("btc_28_03_2025_call_105000.csv")
+    df["contracts"] = df["amount"]
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     print(df)
 
@@ -75,7 +76,7 @@ def main():
     for i in df.index.values:
 
         # We do not do anything until the first 500 trades occur
-        if i < 20:
+        if i < 3:
             pass
 
 
@@ -142,8 +143,8 @@ def main():
 
                 # abnormal_trade_conditions
                 abnormal_trade_conditions = np.where((pd.isna(last_500_trades.loc[i - 1, "block_trade_id"])) |
-                                                     (pd.isna(last_500_trades.loc[i - 1, "combo_trade_id"])) |
-                                                     (pd.isna(last_500_trades.loc[i - 1, "liquidation"])), True, False)
+                                                     (pd.isna(last_500_trades.loc[i - 1, "combo_trade_id"])), True, False)# |
+                                                     #(pd.isna(last_500_trades.loc[i - 1, "liquidation"])), True, False)
                 features_list.append(abnormal_trade_conditions)
 
                 # time_elapsed
