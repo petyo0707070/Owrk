@@ -49,7 +49,7 @@ def main(df, differentiate_bool=False, eth=False):
     sigma = sigma.dropna()
     stationary_series = stationary_series[stationary_series.index.isin(sigma.index)]
 
-    events = getTEvents(stationary_series['price'], 2.5 * sigma)
+    events = getTEvents(stationary_series['price'], 10 * sigma)
 
     t1 = stationary_series['price'].index.searchsorted(events + 100)
     t1 = t1[t1 < stationary_series['price'].shape[0]]
@@ -57,13 +57,24 @@ def main(df, differentiate_bool=False, eth=False):
 
 
     df1 = getEvents(stationary_series['price'], events, [0.5 , 0.5], 10 * sigma, 0.001, 48, t1, None, eth=eth)
+    df1.to_excel("full_event_report.xlsx")
+
+    """""
+    What needs to be done is to sort by start and track the events chronologically instead of sorting by end and dropping things that is very important !!!!
+    Something else also very urgent to consider is the sigma threshold for sPos and sNeg as it stands right now 2.5 is very little, roughly 10% of ticks get flagged as an event !!!
+    Also returns on the option are not representative of dollar PNL so might be better evaluate performance with dollar PNL
+    """""
+
 
     # Insures that there are no overlapping trades
-    df1 = df1.sort_values(by='end', ascending=True)
+    df1 = df1.sort_values(by='start', ascending=True)
+    print(df1)
     df1 = df1[df1['start'] > df1['end'].shift(1)]
     #df1 = df1[df1["start"] > df1["t1"].shift(1)]
     df1 = df1.reset_index(drop=True)
 
+    df1.to_excel("comparison.xlsx")
+    sys.exit()
 
     df1['iv_last_trade'] = df1["start"].apply(lambda x: df.loc[x, "iv"])
     df1["volatility"] = df1["start"].apply(lambda x: sigma.loc[x,])
@@ -78,7 +89,7 @@ def main(df, differentiate_bool=False, eth=False):
     df1["time_elapsed"] = df1["start"].apply(lambda x: df.loc[x, "time_elapsed"])
 
     print(df1)
-    df1.to_excel("comparison.xlsx", index = False)
+    #df1.to_excel("comparison.xlsx", index = False)
 
     # Look to ADD TIME TO EXPIRATION
     # OTM/ATM/ITM
@@ -554,6 +565,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 event_return = (close.loc[t1] - close.loc[loc]) / close.loc[loc]
                 out.loc[loc, "ret"] = event_return
                 out.loc[loc, "bin"] = np.sign(out.loc[int(loc), "ret"])
+                out.loc[loc, "end"] = t1
             except:
                 print(df0)
                 print(loc)
