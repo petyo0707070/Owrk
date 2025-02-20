@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 import numpy as np
 import sys
@@ -29,9 +31,18 @@ def main(df, differentiate_bool=False, eth=False):
     df["time_elapsed"] = df["timestamp"].diff().dt.total_seconds()
 
 
-    print(df)
+
     df["direction"] = df["direction"].apply(lambda x: 1 if x == 'buy' else 0)
     df["index_return"] = df["index_price"].diff() / df["index_price"].shift(1)
+
+    # Get the time to expiration
+    df["time_to_expiration"] = get_time_to_expiration(df)
+
+
+    # Calculate how far away the underlying price is from the option strike price in %, positive values OTM, negative ITM
+    df["strike_underlying_distance"] = get_moneyness(df)
+
+
     if differentiate_bool:
         differentiator = plotMinFFD(df)
         stationary_series = fracDiff_FFD(np.log(df[['close']]), differentiator, 1e-4 / 2)
@@ -49,15 +60,15 @@ def main(df, differentiate_bool=False, eth=False):
     sigma = sigma.dropna()
     stationary_series = stationary_series[stationary_series.index.isin(sigma.index)]
 
-    events = getTEvents(stationary_series['price'], 10 * sigma)
+    events = getTEvents(stationary_series['price'], 8 * sigma)
 
-    t1 = stationary_series['price'].index.searchsorted(events + 100)
+    t1 = stationary_series['price'].index.searchsorted(events + 200)
     t1 = t1[t1 < stationary_series['price'].shape[0]]
     t1 = pd.Series(stationary_series['price'].index[t1], index=events[:t1.shape[0]])
 
 
-    df1 = getEvents(stationary_series['price'], events, [0.5 , 0.5], 10 * sigma, 0.001, 48, t1, None, eth=eth)
-    df1.to_excel("full_event_report.xlsx")
+    df1 = getEvents(stationary_series['price'], events, [1 , 1], 10 * sigma, 0.001, 48, t1, None, eth=eth, raw_data=df)
+    print(df1)
 
     """""
     What needs to be done is to sort by start and track the events chronologically instead of sorting by end and dropping things that is very important !!!!
@@ -67,14 +78,7 @@ def main(df, differentiate_bool=False, eth=False):
 
 
     # Insures that there are no overlapping trades
-    df1 = df1.sort_values(by='start', ascending=True)
-    print(df1)
-    df1 = df1[df1['start'] > df1['end'].shift(1)]
-    #df1 = df1[df1["start"] > df1["t1"].shift(1)]
-    df1 = df1.reset_index(drop=True)
-
-    df1.to_excel("comparison.xlsx")
-    sys.exit()
+    df1 = get_chronological_events(df1)
 
     df1['iv_last_trade'] = df1["start"].apply(lambda x: df.loc[x, "iv"])
     df1["volatility"] = df1["start"].apply(lambda x: sigma.loc[x,])
@@ -87,15 +91,15 @@ def main(df, differentiate_bool=False, eth=False):
     df1["index_return"] = df1["start"].apply(lambda x: df.loc[x, "index_return"])
     df1["abnormal_trade_conditions"] = df1["start"].apply(lambda x: df.loc[x, "abnormal_trade_conditions"])
     df1["time_elapsed"] = df1["start"].apply(lambda x: df.loc[x, "time_elapsed"])
+    df1["time_to_expiration"] = df1["start"].apply(lambda x: df.loc[x, "time_to_expiration"])
+    df1["strike_underlying_distance"] = df1["start"].apply(lambda x: df.loc[x, "strike_underlying_distance"])
 
     print(df1)
-    #df1.to_excel("comparison.xlsx", index = False)
 
-    # Look to ADD TIME TO EXPIRATION
     # OTM/ATM/ITM
     # Time of day might be important ?
 
-    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "abnormal_trade_conditions", "time_elapsed" ]]
+    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "time_elapsed", "time_to_expiration", "strike_underlying_distance"]]#, "abnormal_trade_conditions" ]]
 
     print(df1.groupby("bin").size())
 
@@ -125,7 +129,6 @@ def main(df, differentiate_bool=False, eth=False):
 
     #append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation, y_test)
 
-    sys.exit()
 
     # orthogonal_features_train = orthoFeats(X_train)
     # X_train = pd.DataFrame(orthogonal_features_train, columns=['volatility', 'ret last 5', 'bullish last 5'])
@@ -206,28 +209,34 @@ def main(df, differentiate_bool=False, eth=False):
         precision_train, recall_train, fscore_train, support_train= score(y_train, y_pred_train)
         print(f"Precision for the training set is {precision_train}")
         df_train = df1.loc[y_train.index]
+        df_train = df_train.reset_index(drop = True)
         df_train["bool"] = result_training
         df_train["prediction"] = y_pred_train
-        df_train["result"] = np.where(df_train['prediction'] == 1, (df_train['ret'] * 1 + 1),
-                                 np.where(df_train['prediction'] == - 1, ((df_train['ret'] * - 1) + 1), 1))
-        df_train['result'] = df_train['result'].cumprod()
-        df_train['result'].plot(kind='line', title='Returns of the RF Bagged Model on the training set')
+        df_train["result"] = np.where(df_train['prediction'] == 1, (df_train['USD PNL']),
+                                 np.where(df_train['prediction'] == - 1, ((df_train['USD PNL'] * - 1)), 1))
+        df_train['result'] = df_train['result'].cumsum()
+
+        df_train['result'].plot(kind='line', title='USD PNL of the RF Bagged Model on the training set')
         plt.show()
 
+        sys.exit()
 
         # This shows the performance of our model on the validation dataset
         y_pred_validation = model.predict(X_validation)
         result_validation = y_pred_validation == y_validation
         precision_validation, recall_validation, fscore_validation, support_validation = score(y_validation, y_pred_validation)
-        print(f"Precision for the validation set is {precision_validation}")
+        print(f"Precision for the training set is {precision_validation}")
         df_validation = df1.loc[y_validation.index]
+        df_validation = df_validation.reset_index( drop = True)
         df_validation["bool"] = result_validation
         df_validation["prediction"] = y_pred_validation
-        df_validation["result"] = np.where(df_validation['prediction'] == 1, (df_validation['ret'] * 1 + 1),
-                                      np.where(df_validation['prediction'] == - 1, ((df_validation['ret'] * - 1) + 1), 1))
-        df_validation['result'] = df_validation['result'].cumprod()
-        df_validation['result'].plot(kind='line', title='Returns of the RF Bagged Model on the validation set')
+        df_validation["result"] = np.where(df_validation['prediction'] == 1, (df_validation['USD PNL']),
+                                      np.where(df_validation['prediction'] == - 1, ((df_validation['USD PNL'] * - 1)), 1))
+        df_validation['result'] = df_validation['result'].cumsum()
+        df_validation['result'].plot(kind='line', title='USD PNL of the RF Bagged Model on the validation set')
         plt.show()
+
+        sys.exit()
 
 
         # This shows the performance of our model on the test dataset
@@ -238,10 +247,10 @@ def main(df, differentiate_bool=False, eth=False):
         df_test = df1.loc[y_test.index]
         df_test["bool"] = result_test
         df_test["prediction"] = y_pred_test
-        df_test["result"] = np.where(df_test['prediction'] == 1, (df_test['ret'] * 1 + 1),
-                                      np.where(df_test['prediction'] == - 1, ((df_test['ret'] * - 1) + 1), 1))
-        df_test['result'] = df_test['result'].cumprod()
-        df_test['result'].plot(kind='line', title='Returns of the RF Bagged Model on the test set')
+        df_test["result"] = np.where(df_test['prediction'] == 1, (df_test['USD PNL']),
+                                      np.where(df_test['prediction'] == - 1, ((df_test['USD PNL'] * - 1)), 1))
+        df_test['result'] = df_test['result'].cumsum()
+        df_test['result'].plot(kind='line', title='USD PNL of the RF Bagged Model on the test set')
         plt.show()
 
 
@@ -288,8 +297,25 @@ def append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation
     y_test_new.to_csv("y_test.csv", index = False)
 
 
+def get_moneyness(df):
+    # Calculate how far away the underlying price is from the option strike price in %, positive values OTM, negative ITM
+    underlying_option = df.loc[0, "instrument_name"]
+    strike = int(underlying_option[12:-2])
+    df["moneyness"] = (strike - df["index_price"])/df["index_price"]
+    return df["moneyness"]
 
 
+def get_time_to_expiration(df):
+    month_dict = {"JAN": 1, "FEB":2, "MAR":3, "APR":4, "MAY":5, "JUN":6, "JUL":7, "AUG":8, "SEP":9, "OCT":10, "NOV":11, "DEC":12}
+
+    underlying_option = df.loc[0, "instrument_name"]
+    year = int("20" + underlying_option[9:11])
+    month = month_dict[underlying_option[6:9]]
+    day = int(underlying_option[4:6])
+
+    expiration_date = datetime.datetime(year, month, day, 9, 0, 0)
+    df["time_to_expiration"] = (expiration_date - df["timestamp"]).dt.total_seconds()
+    return df["time_to_expiration"]
 
 # Evaluates a model using a walk-forward test
 def evaluate_model(model, X, y):
@@ -339,6 +365,37 @@ def plot_correlation_matrix(df):
     sns.heatmap(corr, xticklabels=corr.columns.values, yticklabels=corr.columns.values, annot = True, fmt = ".2f", cmap = "coolwarm")
     plt.show()
 
+
+# This gets the events in a chronological order with the idea that we will be in only one trade at a time
+def get_chronological_events(df):
+    df = df.sort_values(by='start', ascending=True)
+
+    #Create an a dataframe with the same columns and data types as the original, but it is empty
+    df1 = df.iloc[:0,:].copy()
+
+    end_current_trade = None
+    first = 1
+
+    for index, row in df.iterrows():
+
+        """""
+         The auxiliary row is transformed into a 1xn dataframe which holds the names of the features as columns and the values in 1 row
+         default behaviour for a row is to be a Series
+        """""
+
+        row_ = row.to_frame().T
+
+        # Special case for the first event
+        if first == 1:
+            first = 0
+            end_current_trade = row["end"]
+            df1 = pd.concat([df1, row_])
+
+        if row["start"] > end_current_trade:
+            end_current_trade = row["end"]
+            df1 = pd.concat([df1, row_])
+
+    return df1
 
 
 
@@ -398,7 +455,7 @@ def getTEvents(gRaw, h):
     return pd.Index(tEvents)
 
 
-def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=None, eth=False):
+def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=None, eth=False, raw_data = pd.DataFrame()):
     # 1) get target
 
     trgt = trgt.loc[tEvents]
@@ -420,7 +477,7 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     events = events.dropna()
 
     df0 = mpPandasObj(func=applyPtSlOnT1, pdObj=('molecule', events.index), numThreads=numThreads, close=close,
-                      events=events, ptSl=ptSl_, eth=eth)
+                      events=events, ptSl=ptSl_, eth=eth, raw_data = raw_data)
 
     # events['t1']=df0.dropna(how='all').min(axis=1) # pd.min ignores nan
 
@@ -428,7 +485,7 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     return df0
 
 
-def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
+def applyPtSlOnT1(close, events, ptSl, molecule, eth=False, raw_data = pd.DataFrame()):
     # apply stop loss/profit taking, if it takes place before t1 (end of event)
     events_ = events.loc[molecule]
     out = events_[['t1']].copy(deep=True)
@@ -444,6 +501,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
 
     for loc, t1 in events_['t1'].items():  # fillna(close.index[-1]).items():
+
 
         df0 = close.loc[int(loc):int(t1),]  # path prices !! THIS WAS CORRECTED
 
@@ -468,7 +526,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
             index_pt_hit = (df0 > pt[loc]).idxmax()
             #print(f"The indes of the first hit PT is {index_pt_hit}, the range is {loc} - {t1}, it took {index_pt_hit - loc} trades")
 
-            # out.loc[loc, "ret"] = df0.loc[index_pt_hit]
+            #out.loc[loc, "ret"] = df0.loc[index_pt_hit]
 
             # Checks if the option traded is on ETH because there the spreads are usually 0.001 if above 0.005
 
@@ -478,6 +536,7 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
             else:
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_pt_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
+            out.loc[loc, "USD PNL"] = (raw_data.loc[index_pt_hit, "price"] - raw_data.loc[loc, "price"]) * raw_data.loc[index_pt_hit, "index_price"]  - min(0.125 * raw_data.loc[index_pt_hit, "price"] * raw_data.loc[index_pt_hit, "index_price"], 0.0003 * raw_data.loc[index_pt_hit, "index_price"]) - min(0.125 * raw_data.loc[loc, "price"] * raw_data.loc[loc, "index_price"], 0.0003 * raw_data.loc[loc, "index_price"])
 
 
             # Very important deduct fees from the reutrn :))))
@@ -505,6 +564,9 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
                 out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[index_sl_hit] > 0.005 else 0.0005 / \
                                                                                                       close.loc[loc]
 
+            out.loc[loc, "USD PNL"] = ( raw_data.loc[index_sl_hit, "price"] - raw_data.loc[loc, "price"]) * raw_data.loc[index_sl_hit, "index_price"]  - min(0.125 * raw_data.loc[index_sl_hit, "price"] * raw_data.loc[index_sl_hit, "index_price"], 0.0003 * raw_data.loc[index_sl_hit, "index_price"]) - min(0.125 * raw_data.loc[loc, "price"] * raw_data.loc[loc, "index_price"], 0.0003 * raw_data.loc[loc, "index_price"])
+
+
             out.loc[loc, "ret"] = df0.loc[index_sl_hit] + out.loc[loc, 'fees']
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
@@ -529,6 +591,10 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             out.loc[loc, "ret"] = df0.loc[index_pt_hit] - out.loc[loc, 'fees']
 
+
+            out.loc[loc, "USD PNL"] = (raw_data.loc[index_pt_hit, "price"] - raw_data.loc[loc, "price"]) * raw_data.loc[index_pt_hit, "index_price"]  - min(0.125 * raw_data.loc[index_pt_hit, "price"] * raw_data.loc[index_pt_hit, "index_price"], 0.0003 * raw_data.loc[index_pt_hit, "index_price"]) - min(0.125 * raw_data.loc[loc, "price"] * raw_data.loc[loc, "index_price"], 0.0003 * raw_data.loc[loc, "index_price"])
+
+
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
             out.loc[loc, 'bin'] = 1
@@ -551,6 +617,8 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
 
             out.loc[loc, "ret"] = df0.loc[index_sl_hit] + out.loc[loc, 'fees']
 
+            out.loc[loc, "USD PNL"] = (raw_data.loc[index_sl_hit, "price"] - raw_data.loc[loc, "price"]) * raw_data.loc[index_sl_hit, "index_price"]  - min(0.125 * raw_data.loc[index_sl_hit, "price"] * raw_data.loc[index_sl_hit, "index_price"], 0.0003 * raw_data.loc[index_sl_hit, "index_price"]) - min(0.125 * raw_data.loc[loc, "price"] * raw_data.loc[loc, "index_price"], 0.0003 * raw_data.loc[loc, "index_price"])
+
 
             # print(f'Return is {round(out.loc[loc, "ret"],4)}, fees are {round(out.loc[loc, "fees"],4)}')
 
@@ -563,8 +631,19 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False):
         else:
             try:
                 event_return = (close.loc[t1] - close.loc[loc]) / close.loc[loc]
+
+
+
+                out.loc[loc, "USD PNL"] = (raw_data.loc[t1, "price"] - raw_data.loc[loc, "price"]) * \
+                                          raw_data.loc[t1, "index_price"] - min(
+                    0.125 * raw_data.loc[t1, "price"] * raw_data.loc[t1, "index_price"],
+                    0.0003 * raw_data.loc[t1, "index_price"]) - min(
+                    0.125 * raw_data.loc[loc, "price"] * raw_data.loc[loc, "index_price"],
+                    0.0003 * raw_data.loc[loc, "index_price"])
+
+
                 out.loc[loc, "ret"] = event_return
-                out.loc[loc, "bin"] = np.sign(out.loc[int(loc), "ret"])
+                out.loc[loc, "bin"] = 1 if event_return >= 0 else -1
                 out.loc[loc, "end"] = t1
             except:
                 print(df0)
@@ -874,12 +953,12 @@ def monte_carlo_permutation_generator(df):
 
 if __name__ == '__main__':
     # Normal Test
-    df = pd.read_csv("btc_30_09_2022_call_20000.csv", parse_dates=True)
+    df = pd.read_csv("btc_27_12_call_100000.csv", parse_dates=True)
 
     if "contracts" not in df.columns:
         df["contracts"] = df["amount"]
 
-    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts', "block_trade_id", "combo_trade_id"]]#, "liquidation"]]
+    df = df[['timestamp', 'tick_direction', 'price', 'mark_price', 'iv', 'index_price', 'direction', 'contracts', "block_trade_id", "instrument_name","combo_trade_id"]]#, "liquidation"]]
 
     main(df, eth=False)
 
