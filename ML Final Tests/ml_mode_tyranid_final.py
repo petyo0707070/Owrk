@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import BaggingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.pipeline import Pipeline
 import scipy.stats as ss
 from sklearn.metrics import precision_recall_fscore_support as score
@@ -31,7 +31,6 @@ def main(df, differentiate_bool=False, eth=False):
     df["time_elapsed"] = df["timestamp"].diff().dt.total_seconds()
 
 
-
     df["direction"] = df["direction"].apply(lambda x: 1 if x == 'buy' else 0)
     df["index_return"] = df["index_price"].diff() / df["index_price"].shift(1)
 
@@ -42,6 +41,10 @@ def main(df, differentiate_bool=False, eth=False):
     # Calculate how far away the underlying price is from the option strike price in %, positive values OTM, negative ITM
     df["strike_underlying_distance"] = get_moneyness(df)
 
+    #Get the Hawkes Process with volume imbalance as a feature, higher values of kappa mean faster decay, discounted by t measured in days
+    df["hawkes"] = hawkes_process(df["contracts"] * df["direction"].apply(lambda x: 1 if x == 1 else -1), df["time_elapsed"], 0.5)
+
+    print(df)
 
     if differentiate_bool:
         differentiator = plotMinFFD(df)
@@ -53,16 +56,16 @@ def main(df, differentiate_bool=False, eth=False):
 
     # Calculate the exponentially weighted volatility of the past 100 trades
     df0 = stationary_series / stationary_series.shift(1) - 1  # returns
-    sigma = df0.ewm(span=500).std()
+    sigma = df0.ewm(span=200).std()
 
     # We drop the na values and select the rows from the stationary series which are the ones
     # which did not get dropped
     sigma = sigma.dropna()
     stationary_series = stationary_series[stationary_series.index.isin(sigma.index)]
 
-    events = getTEvents(stationary_series['price'], 8 * sigma)
+    events = getTEvents(stationary_series['price'], 10 * sigma)
 
-    t1 = stationary_series['price'].index.searchsorted(events + 200)
+    t1 = stationary_series['price'].index.searchsorted(events + 100)
     t1 = t1[t1 < stationary_series['price'].shape[0]]
     t1 = pd.Series(stationary_series['price'].index[t1], index=events[:t1.shape[0]])
 
@@ -93,13 +96,14 @@ def main(df, differentiate_bool=False, eth=False):
     df1["time_elapsed"] = df1["start"].apply(lambda x: df.loc[x, "time_elapsed"])
     df1["time_to_expiration"] = df1["start"].apply(lambda x: df.loc[x, "time_to_expiration"])
     df1["strike_underlying_distance"] = df1["start"].apply(lambda x: df.loc[x, "strike_underlying_distance"])
+    df1["hawkes"] = df1["start"].apply(lambda x: df.loc[x, "hawkes"])
 
     print(df1)
 
     # OTM/ATM/ITM
     # Time of day might be important ?
 
-    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "time_elapsed", "time_to_expiration", "strike_underlying_distance"]]#, "abnormal_trade_conditions" ]]
+    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "time_elapsed", "time_to_expiration", "strike_underlying_distance", "abnormal_trade_conditions", "hawkes" ]]
 
     print(df1.groupby("bin").size())
 
@@ -153,7 +157,7 @@ def main(df, differentiate_bool=False, eth=False):
         y_pred = baggin_classifier.predict(X_test)
 
     # 3 Ways to set up random forests
-    def random_forest(i=2, avgU=avgU):
+    def random_forest(i=2, avgU=avgU, X_train = X_train, y_train = y_train):
 
         if i == 0:
             model = RandomForestClassifier(n_estimators=1000, class_weight='balanced_subsample', criterion='entropy')
@@ -168,13 +172,16 @@ def main(df, differentiate_bool=False, eth=False):
                                            min_weight_fraction_leaf=0.05, n_jobs = 1)
             model = BaggingClassifier(estimator=model, n_estimators = 100, max_samples=avgU)  # , max_features=1.)
 
+            walk_forward_result = evaluate_model(model, X_train, y_train)
+            print(f"The result of the walk forward are {walk_forward_result}")
+
+
+
+
+
         # stratified_kfold = StratifiedKFold(n_splits=10, shuffle=False)
         # cross_score = cross_val_score(model, X_train, y_train, cv=stratified_kfold, scoring="f1")
         # print(f"Cross-validation score for the random-forest model is {np.mean(cross_score)}")
-
-        walk_forward_result = evaluate_model(model, X_train, y_train)
-        print(f"The result of the walk forward are {walk_forward_result}")
-
 
         model.fit(X_train, y_train)
         y_pred = model.predict(X_validation)
@@ -219,13 +226,13 @@ def main(df, differentiate_bool=False, eth=False):
         df_train['result'].plot(kind='line', title='USD PNL of the RF Bagged Model on the training set')
         plt.show()
 
-        sys.exit()
+        #sys.exit()
 
         # This shows the performance of our model on the validation dataset
         y_pred_validation = model.predict(X_validation)
         result_validation = y_pred_validation == y_validation
         precision_validation, recall_validation, fscore_validation, support_validation = score(y_validation, y_pred_validation)
-        print(f"Precision for the training set is {precision_validation}")
+        print(f"Precision for the validation set is {precision_validation}")
         df_validation = df1.loc[y_validation.index]
         df_validation = df_validation.reset_index( drop = True)
         df_validation["bool"] = result_validation
@@ -304,6 +311,22 @@ def get_moneyness(df):
     df["moneyness"] = (strike - df["index_price"])/df["index_price"]
     return df["moneyness"]
 
+
+# timedelta is measured in seconds since last trade
+def hawkes_process(data: pd.Series, time_delta ,kappa: float):
+    assert(kappa > 0.0)
+    time_delta = time_delta.to_numpy()
+    arr = data.to_numpy()
+    output = np.zeros(len(data))
+    output[:] = np.nan
+    for i in range(1, len(data)):
+        if np.isnan(output[i - 1]):
+            output[i] = arr[i]
+        else:
+            time_elapsed_days = time_delta[i] / 86400
+            alpha = np.exp(-kappa * time_elapsed_days)
+            output[i] = output[i - 1] * alpha + arr[i]
+    return pd.Series(output, index=data.index) * kappa
 
 def get_time_to_expiration(df):
     month_dict = {"JAN": 1, "FEB":2, "MAR":3, "APR":4, "MAY":5, "JUN":6, "JUL":7, "AUG":8, "SEP":9, "OCT":10, "NOV":11, "DEC":12}
@@ -953,7 +976,7 @@ def monte_carlo_permutation_generator(df):
 
 if __name__ == '__main__':
     # Normal Test
-    df = pd.read_csv("btc_27_12_call_100000.csv", parse_dates=True)
+    df = pd.read_csv("btc_27_09_2024_call_70000.csv", parse_dates=True)
 
     if "contracts" not in df.columns:
         df["contracts"] = df["amount"]
