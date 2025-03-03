@@ -44,6 +44,9 @@ def main(df, differentiate_bool=False, eth=False):
     #Get the Hawkes Process with volume imbalance as a feature, higher values of kappa mean faster decay, discounted by t measured in days
     df["hawkes"] = hawkes_process(df["contracts"] * df["direction"].apply(lambda x: 1 if x == 1 else -1), df["time_elapsed"], 0.5)
 
+    # Get an estimator for the linearity of price
+    df["PTSR"] = rw_ptsr(df["price"].to_numpy(), 200)
+
     print(df)
 
     if differentiate_bool:
@@ -71,7 +74,7 @@ def main(df, differentiate_bool=False, eth=False):
 
 
     df1 = getEvents(stationary_series['price'], events, [1 , 1], 10 * sigma, 0.001, 48, t1, None, eth=eth, raw_data=df)
-    print(df1)
+    df1 = df1.sort_values(by='start', ascending=True)
 
     """""
     What needs to be done is to sort by start and track the events chronologically instead of sorting by end and dropping things that is very important !!!!
@@ -80,8 +83,8 @@ def main(df, differentiate_bool=False, eth=False):
     """""
 
 
-    # Insures that there are no overlapping trades
-    df1 = get_chronological_events(df1)
+    # For now we will go off the assumption starting with that the training will include all the trades while validation and testing only the chronological ondes
+    #df1 = get_chronological_events(df1)
 
     df1['iv_last_trade'] = df1["start"].apply(lambda x: df.loc[x, "iv"])
     df1["volatility"] = df1["start"].apply(lambda x: sigma.loc[x,])
@@ -97,13 +100,17 @@ def main(df, differentiate_bool=False, eth=False):
     df1["time_to_expiration"] = df1["start"].apply(lambda x: df.loc[x, "time_to_expiration"])
     df1["strike_underlying_distance"] = df1["start"].apply(lambda x: df.loc[x, "strike_underlying_distance"])
     df1["hawkes"] = df1["start"].apply(lambda x: df.loc[x, "hawkes"])
+    df1["PTSR"] = df1["start"].apply(lambda x: df.loc[x, "PTSR"])
+    # Drop events in the warmup period but START COUNTING SPOS AND SNEG AS SOON AS THE FIRST TRADE
+    df1.dropna(inplace = True)
 
     print(df1)
 
-    # OTM/ATM/ITM
-    # Time of day might be important ?
 
-    features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "time_elapsed", "time_to_expiration", "strike_underlying_distance", "abnormal_trade_conditions", "hawkes" ]]
+    #features_list = df1[["volatility", "ret_last_10", "iv_last_trade", "price_mark_price_deviation", "volume_last_10_trades", "buy_last_10_trades", "index_return", "time_elapsed", "time_to_expiration", "strike_underlying_distance", "abnormal_trade_conditions", "hawkes", "PTSR" ]]
+    features = ["PTSR", "hawkes", "strike_underlying_distance", "time_to_expiration"]
+
+    features_list = df1[features]
 
     print(df1.groupby("bin").size())
 
@@ -128,9 +135,16 @@ def main(df, differentiate_bool=False, eth=False):
 
 
 
+
+    # This part here insures that we only get the trades we would have entered in the validation and test set ?????
+    # Perhaps it is better to include all in order to train the model on as many events as possible
+    df_temp = df1[df1.index.isin(X_validation_test.index)]
+    df_temp = get_chronological_events(df_temp)
+    X_validation_test = df_temp[features]
+    y_validation_test = df_temp["bin"].astype(float)
+
+
     X_validation, X_test, y_validation, y_test = train_test_split(X_validation_test, y_validation_test, test_size = 0.5, shuffle= False)
-
-
     #append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation, y_test)
 
 
@@ -167,15 +181,14 @@ def main(df, differentiate_bool=False, eth=False):
             model = BaggingClassifier(estimator=model, n_estimators=1000, max_samples=avgU)
 
         elif i == 2:
-            model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=False,
+            model = RandomForestClassifier(n_estimators=100, criterion='entropy', bootstrap=True,
                                            class_weight='balanced_subsample',
-                                           min_weight_fraction_leaf=0.05, n_jobs = 1)
+                                           min_weight_fraction_leaf=0.05, n_jobs = 1, max_depth=3)
             model = BaggingClassifier(estimator=model, n_estimators = 100, max_samples=avgU)  # , max_features=1.)
 
-            walk_forward_result = evaluate_model(model, X_train, y_train)
-            print(f"The result of the walk forward are {walk_forward_result}")
-
-
+            walk_forward_precision, walk_forward_accuracy = evaluate_model(model, X_train, y_train)
+            print(f"The precision of the walk forward is {walk_forward_precision}")
+            print(f"The accuracy of the walk forward is {walk_forward_accuracy}")
 
 
 
@@ -209,12 +222,14 @@ def main(df, differentiate_bool=False, eth=False):
 
 
     def simple_stats(y_pred, model,df1=df1):
+        from sklearn.metrics import accuracy_score
 
         # This shows the performance of our model on the training dataset
         y_pred_train = model.predict(X_train)
         result_training = y_pred_train == y_train
         precision_train, recall_train, fscore_train, support_train= score(y_train, y_pred_train)
-        print(f"Precision for the training set is {precision_train}")
+        accuracy_train = accuracy_score(y_train, y_pred_train)
+        print(f"Precision for the training set is {precision_train}, Accuracy is {accuracy_train}")
         df_train = df1.loc[y_train.index]
         df_train = df_train.reset_index(drop = True)
         df_train["bool"] = result_training
@@ -228,11 +243,16 @@ def main(df, differentiate_bool=False, eth=False):
 
         #sys.exit()
 
+
+
+
         # This shows the performance of our model on the validation dataset
         y_pred_validation = model.predict(X_validation)
         result_validation = y_pred_validation == y_validation
+
         precision_validation, recall_validation, fscore_validation, support_validation = score(y_validation, y_pred_validation)
-        print(f"Precision for the validation set is {precision_validation}")
+        accuracy_validation = accuracy_score(y_validation, y_pred_validation)
+        print(f"Precision for the validation set is {precision_validation}, Accuracy is {accuracy_validation}")
         df_validation = df1.loc[y_validation.index]
         df_validation = df_validation.reset_index( drop = True)
         df_validation["bool"] = result_validation
@@ -246,11 +266,17 @@ def main(df, differentiate_bool=False, eth=False):
         sys.exit()
 
 
+
         # This shows the performance of our model on the test dataset
         y_pred_test = model.predict(X_test)
         result_test = y_pred_test == y_test
+
         precision_test, recall_test, fscore_test, support_test = score(y_test, y_pred_test)
-        print(f"Precision for the test set is {precision_test}")
+        accuracy_test = accuracy_score(y_test, y_pred_test)
+        print(f"Precision for the test set is {precision_test}, Accuracy is {accuracy_test}")
+        df_test = df1.loc[y_test.index]
+
+
         df_test = df1.loc[y_test.index]
         df_test["bool"] = result_test
         df_test["prediction"] = y_pred_test
@@ -304,6 +330,80 @@ def append_to_combined_data(X_train, X_validation, X_test, y_train, y_validation
     y_test_new.to_csv("y_test.csv", index = False)
 
 
+# Implement ordinal patterns permutation as a proxy of the linearity of pricce !!! Low Linearity better mean reversion, dimensiotality is set at 3
+# Only hyper parameter needed is lookback and the close array needs to be in a numpy format
+def ordinal_patterns(arr: np.array, d: int) -> np.array:
+    import math
+    assert (d >= 2)
+    fac = math.factorial(d);
+    d1 = d - 1
+    mults = []
+    for i in range(1, d):
+        mult = fac / math.factorial(i + 1)
+        mults.append(mult)
+
+    # Create array to put ordinal pattern in
+    ordinals = np.empty(len(arr))
+    ordinals[:] = np.nan
+
+    for i in range(d1, len(arr)):
+        dat = arr[i - d1:  i + 1]
+        pattern_ordinal = 0
+        for l in range(1, d):
+            count = 0
+            for r in range(l):
+                if dat[d1 - l] >= dat[d1 - r]:
+                    count += 1
+
+            pattern_ordinal += count * mults[l - 1]
+        ordinals[i] = int(pattern_ordinal)
+
+    return ordinals
+
+
+def perm_ts_reversibility(arr: np.array):
+    import scipy
+    # Zanin, M.; Rodríguez-González, A.; Menasalvas Ruiz, E.; Papo, D. Assessing time series reversibility through permutation
+
+    # Should be fairly large array, very least ~60
+    assert (len(arr) >= 10)
+    rev_arr = np.flip(arr)
+
+    # [2:] drops 2 nan values off start of val
+    pats = ordinal_patterns(arr, 3)[2:].astype(int)
+    r_pats = ordinal_patterns(rev_arr, 3)[2:].astype(int)
+
+    # pdf of patterns, forward and reverse time
+    n = len(arr) - 2
+    p_f = np.bincount(pats, minlength=6) / n
+    p_r = np.bincount(r_pats, minlength=6) / n
+
+    if min(np.min(p_f), np.min(p_r)) > 0.0:
+        rev = scipy.special.rel_entr(p_f, p_r).sum()
+    else:
+        rev = np.nan
+
+    return rev
+
+
+def rw_ptsr(arr: np.array, lookback: int):
+    # Rolling window permutation time series reversibility
+    rev = np.zeros(len(arr))
+    rev[:] = np.nan
+
+    lookback_ = lookback + 2
+    for i in range(lookback_, len(arr)):
+        dat = arr[i - lookback_ + 1: i + 1]
+        rev_w = perm_ts_reversibility(dat)
+
+        if np.isnan(rev_w):
+            rev[i] = rev[i - 1]
+        else:
+            rev[i] = rev_w
+
+    return rev
+
+
 def get_moneyness(df):
     # Calculate how far away the underlying price is from the option strike price in %, positive values OTM, negative ITM
     underlying_option = df.loc[0, "instrument_name"]
@@ -348,9 +448,10 @@ def evaluate_model(model, X, y):
 
 
     cv = StratifiedKFold(n_splits = 5)
-    score = cross_val_score(model, X, y, scoring = "precision_weighted", cv = cv, n_jobs = 16, error_score = "raise")
+    score_precision = cross_val_score(model, X, y, scoring = "precision_weighted", cv = cv, n_jobs = 16, error_score = "raise")
+    score_accuracy = cross_val_score(model, X, y, scoring = "balanced_accuracy", cv = cv, n_jobs = 16, error_score="raise")
 
-    return score
+    return score_precision, score_accuracy
 
 def generate_model_proposals(model, X, y, max_n_features = 5):
     from sklearn.feature_selection import RFE
@@ -654,6 +755,14 @@ def applyPtSlOnT1(close, events, ptSl, molecule, eth=False, raw_data = pd.DataFr
         else:
             try:
                 event_return = (close.loc[t1] - close.loc[loc]) / close.loc[loc]
+
+                if eth == False:
+                    out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[t1] > 0.01 else 0.0005 / \
+                                                                                                         close.loc[
+                                                                                                             loc]
+                else:
+                    out.loc[loc, 'fees'] = 0.001 / close.loc[loc] if close.loc[t1] > 0.005 else 0.0005 / \
+                                                                                                          close.loc[loc]
 
 
 
