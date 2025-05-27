@@ -1,0 +1,251 @@
+---
+title: "Assignment 2"
+output: pdf_document
+date: "2025-05-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.Ommitted Variable Bias
+
+```{r}
+library(data.table)
+
+# Load the data
+data('CPS1985', package = 'AER')
+
+# Convert to a data table
+cps1985_dt <- as.data.table(CPS1985)
+cps1985_dt <- cps1985_dt[,.(wage, experience, age)] # Leave only the columns refering to wage, experience and age
+
+model_ommited <- lm(wage ~ experience, data = cps1985_dt)
+model_actual <- lm(wage ~ experience + age, data = cps1985_dt )
+```
+
+
+
+### Part A
+
+One would expect that age has a positive effect on wages, as the older the person is, the more likely it is that they hold a high paying job. Apart from that the correlation between age and experience is also very high, as older people have simply had more time to work and hence accumulate experience, which can also be seen by the formula in the documentation, where experience is defined as age - education - 6. In other words cov(experience, age) \> 0 as well as cov(age, wage) \> 0, which would lead to a positive bias
+
+### Part B
+
+Summary of the restricted model
+
+```{r}
+print(summary(model_ommited) )
+```
+
+Summary of the complete model
+
+```{r}
+print(summary(model_actual) )
+```
+
+The ommited variable bias affects the coefficient of experience, this can be seen by the difference between the size of this coefficient in the full and restricted models: 
+-0.81904 - 0.03614 = - 0.85518, this means that we overestimated the coefficient of experience by 0.85518 in the restricted model (positive bias). The ommited variable bias in this case is so severe and likely still persists (Adjusted R2 of 0.198 indicating that we have left out other relevant variables) that the OMV bias is larger than the true effect of the coefficient of experience essentially flipping its sign all together in the restricted model (it went from a positive effect to a negative effect once we included the ommited variable age)
+
+
+###Part C
+The ommision of age in the restricted model, also quite heavily affected the standard errors. In the restricted model SE for experience was 0.01793, while in the complete model it was 0.07713. This is quite problematic as OMV damages the internal validity of a regression two fold. Firstly, as we discussed before it biased the coefficients, which could affect the truthfullness of statistical tests. Even worse it also substantially reduces the standard errors compared to their true values making it more likely that type I errors occur at a frequently greater than the significance level alpha, as rejecting H0 becomes easier due to the lower denominator of the t-statistic.
+
+## 2. F-test
+```{r}
+data('CASchools', package = 'AER')
+
+caschools_dt <- as.data.table(CASchools) # Load as data table
+caschools_dt[, score := (read + math) / 2] # Create a column score
+caschools_dt <- caschools_dt[, .(score, income)] # Subset for score and income
+
+caschools_dt[, income2 := income * income] # Create a varaible that is income squared
+
+full_model <- lm(score ~ (income + income2), data = caschools_dt) # Define the full model
+model_constant <- lm(score ~ 1, data = caschools_dt) # Restricted model only with a constant
+model_income <- lm(score ~ income , data = caschools_dt) # Restricted model only with income
+```
+
+
+```{r}
+compute_f <- function(unrestricted, restricted){
+    ssr_restricted <- sum(residuals(restricted) * residuals(restricted))
+    ssr_unrestricted <- sum(residuals(unrestricted) * residuals(unrestricted))
+    q <- length(coefficients(unrestricted)) - length(coefficients(restricted))
+    df <- length(residuals(unrestricted)) - length(coefficients(unrestricted))
+    F_statistic <- ( (ssr_restricted - ssr_unrestricted) / q ) / (ssr_unrestricted / df)
+    return(F_statistic)
+}
+
+# H0: bIncome = bIncome2 = 0 H1: At least one of bIncome or bIncome2 != 0
+F_stat_constant <- compute_f(full_model, model_constant)
+
+# H0: bIncome2 = 0 H1: bIncome2 != 0 this F-test is the same as the squared value of the t-statistic with the same hypothesis
+F_stat_income <- compute_f(full_model, model_income)
+
+
+```
+The F statistic for the model score ~ 1 has H0: bIncome = bIncome2 = 0 H1: At least one of bIncome or bIncome2 != 0, Fobs has a value of 261.28 with dfnum = 2 and dfden = 417
+
+The F statistic for the model score ~ income has H0: bIncome2 = 0 H1: bIncome2 != 0 this F-test is the same as the squared value of the t-statistic with the same hypothesis, Fobs has a value of 45.68 with dfnum = 1 and dfden = 417
+
+
+```{r}
+# Plot the F distribution under H0 for the first restricted model score ~ 1
+curve(df(x, 2, 417), from = 0, to = 300, ylab = 'Denstiy', main = 'F-distribution of the constant restricted model')
+abline(v = qf(0.95, 2, 417), col = 'red', lty = 2)
+abline(v = F_stat_constant, col = 'darkgreen', lwd = 2)
+legend('topright', legend = c('Critical Value (5%)', 'F-statistic'), col = c('red', 'darkgreen'), lty = c(2,1))
+```
+```{r}
+# Plot the F distribution under H0 for the first restricted model score ~ income
+curve(df(x, 2, 417), from = 0, to = 50, ylab = 'Denstiy', main = 'F-distribution of the income restricted model')
+abline(v = qf(0.95, 2, 417), col = 'red', lty = 2)
+abline(v = F_stat_income, col = 'darkgreen', lwd = 2)
+legend('topright', legend = c('Critical Value (5%)', 'F-statistic'), col = c('red', 'darkgreen'), lty = c(2,1)) 
+```
+The F-statistic on the restricted model only with a constant yields an F value of 261.28, given its df1 = 2 and df2 = 417, it has a p-value of 2.78e-74, meaning that we reject the hypothesis that both  the coefficients of Income and Income2 are equal to 0 and we accept the alternative hypothesis that at least one of those two coefficients if not both are statistically different than 0
+```{r}
+print(pf(F_stat_constant, 2, 417, lower.tail =  FALSE))
+```
+The F-statistic on the restricted model  with a constant and income yields an F value of 45.68, given its df1 = 1 and df2 = 417, it has a p-value of 5.58e-46, meaning that we reject the hypothesis that the coefficients of Income2 is equal to 0 and we accept the alternative hypothesis its coefficient is statistically different than 0. This is the same hypothesis test as a t-statistic with the only caveat that F obs = tobs * tobs
+```{r}
+print(pf(F_stat_constant, 1, 417, lower.tail =  FALSE))
+```
+Plot the scatterplot with the fitted lines
+```{r}
+caschools_dt_sorted <- caschools_dt[order(income)]
+sorted_idx <- order(caschools_dt$income)
+
+
+plot(caschools_dt$income, caschools_dt$score,, main = 'Mean Test Score vs District Income', xlab = 'District Income', ylab = 'Score')
+
+lines(caschools_dt$income[sorted_idx], fitted.values(full_model)[order(caschools_dt$income)], col = 'green', lwd = '2')
+lines(caschools_dt$income[sorted_idx], fitted.values(model_constant)[order(caschools_dt$income)], col = 'red', lwd = '2')
+lines(caschools_dt$income[sorted_idx], fitted.values(model_income)[order(caschools_dt$income)], col = 'blue', lwd = '2')
+
+legend('bottomright', legend = c('Full Model(Intercept + Inc + Inc2)', 'Inc Model( Intercept + Inc)', 'Intercept Model'), col = c('green', 'red', 'blue'), lwd = 2)
+
+```
+##3.S&P 500 Financials
+
+### Part A
+```{r}
+load('sp500.RData')
+sp500_dt <- as.data.table(sp500)
+```
+
+Plot the density of marketcap
+```{r}
+hist(sp500_dt$mkt_cap, breaks = 200, xlab = 'Market Cap', ylab = 'Density', main = 'Market Cap Histogram', freq = FALSE)
+```
+
+Plot the density of Book Value
+```{r}
+hist(sp500_dt$bookval, breaks = 200, xlab = 'Book Value', ylab = 'Density', main = 'Book Value Histogram', freq = FALSE)
+```
+The issue with both variables is that they have quite a fat right tail, i.e. they will likely skew any linear model such as a regression due to incredibly large outliers, the solution to this is to apply a log transformation, that will severely curb the outliers and make the data a little bit more 'well behaved'
+
+Apply a log transformation
+```{r}
+sp500_dt[, log_bookval := log(bookval)]
+sp500_dt[, log_mkt_cap := log(mkt_cap)]
+```
+
+Plot the log density of market cap
+```{r}
+hist(sp500_dt$log_mkt_cap, breaks = 20, xlab = 'Market Cap', ylab = 'Density', main = 'Log Market Cap Histogram', freq = FALSE)
+```
+Plot the log density of book value
+```{r}
+hist(sp500_dt$log_bookval, breaks = 20, xlab = 'Market Cap', ylab = 'Density', main = 'Log Bookvalue Histogram', freq = FALSE)
+```
+Converting to logs, we mostly solve the outlier problem which would make fitting subsequent linear models easier and more robust
+
+Scatterplot of untransformed value
+```{r}
+plot(sp500_dt$bookval, sp500_dt$mkt_cap, xlab = 'Bookvalue', ylab = 'Market Cap', main = 'Scatterplot of Bookvalue and Market Cap')
+```
+Scatterplot of Log-transformed Values
+```{r}
+plot(sp500_dt$log_bookval, sp500_dt$log_mkt_cap, xlab = 'Log Bookvalue', ylab = 'Log Market Cap', main = 'Scatterplot of Log Bookvalue and Market Cap')
+```
+The log transformation curbes outliers and better captures the linear relationship between Bookvalue and Market Cap. The transformation is definetely a good idea because this type of data is much more favourable for regressions, why the transformation works is because we are go from absolute values which can grow exponentially in nominal terms to relative % difference, which is an additive measure unlike the absolute values which are a multiplicative measure.   
+
+Generate Boxplots of market cap for each sector
+```{r}
+sectors <- unique(sp500_dt$sector) # Extract a vector of all the sectors
+for (sector_ in sectors){
+    sp500_subset <- sp500_dt[sector == sector_ ]
+    boxplot(log_mkt_cap ~ sector, data = sp500_subset, main = paste('Boxplot ', sector_, ' Market Cap'), xlab = sector_, ylab = 'Market Cap' )
+}
+
+```
+ 
+
+### Part B
+```{r}
+# We have 5 sectors in total, therfore we need to encode 4 binary variables each corresponding to a certain sector, leaving out 1 as baseline, in our case we will leave out Industrials & Materials as the baseline variable
+sp500_dt[, healthcare := as.numeric(sector == 'Healthcare')] # Binary variable 1 if the sector is healthcare
+sp500_dt[, technology := as.numeric(sector == 'Technology')] # Binary variable 1 if the sector is technology
+sp500_dt[, financials_realestate := as.numeric(sector == 'Financials & Real Estate')] # Binary variable 1 if the sector is Financials & Real Estate
+sp500_dt[, consumer_retail := as.numeric(sector == 'Consumer & Retail')] # Binary variable 1 if the sector is Consumer & Retail
+sp500_dt[, industrials_materials := as.numeric(sector == 'Industrials & Materials')] # Binary variable 1 if the sector is Industrials & Mateirials
+
+model <- lm(log_mkt_cap ~ log_bookval + healthcare + technology + financials_realestate + consumer_retail, data = sp500_dt)
+
+```
+
+```{r}
+print(summary(model))
+```
+
+The output of the regression suggests that for each 1% increase in the Bookvalue of a company on average its marketcap increases by 0.578%, ceteris paribus, this effect is statistically significant at any alpha, mainly because it has a p-value of 2e-16. Additionally, compared to our base line that being Industrials & Materials, sectors generally do not influence the market-cap of a company with the exception of Technology companies, which compared to otherwise similar Industrial Firms have on average a exp(0.739) - 1 = 109.4% higher market cap than their industrial counterparts, this effect is very significant with a p-value of 2.36e-09. 
+
+Additionally, the F-test of joint significance has an observed value of 61.86 with a p-value of 2.2e-16, which suggests that at least one of the coefficients is statistically different than 0, therefore the model explains the variation of market cap better than a simple naive model with a constant and noise. The Adjusted R2 is 41% , which basically implies that after controlling for the inclusion of additional regressors, the variance of our explanatory variables captures roughly 41% of the variance of the dependent variable (market cap). All in all the regression shows a moderately good model fit, however, one should be careful to jump to conclusions as the low R2 might mean that there are other statistically significant variables which influence marketcap and are correlated with book value but are ommited from the regression, implying that we might be suffering from an Ommited Variable Bias problem.
+
+# Part C
+```{r}
+#Add an interaction term colum to sp500_dt
+model_interaction <- lm(log_mkt_cap ~ log_bookval + technology + technology * log_bookval, data = sp500_dt)
+
+print(summary(model_interaction))
+```
+This regression again produces a statistically significant result for bookvalue, implying that all else held equal a 1% rise in Bookvalue leads to a marketcap increase of 0.5086% (p-value basically 0), however, this effect only holds for firms outside of the technology sector. For firms in the technology sector the effect of 1% increase in bookvalue also needs to take into account the interaction term, in our case the interaction term is statistically signficant at a 1% significance level, implying that technology companies have a different reaction to bookvalue increases equal to the sum of the coefficients of log_bookval + log_bookval:technology = 0.50866 + 0.21478 = 0.72344 i.e. for a 1% increase in bookvalue if a firm is a Technology company it experiences an increase of 0.723% in its market cap, ceteris paribus.
+
+```{r}
+# Create a sequence of log_bookval values
+log_bookval_seq <- seq(min(sp500_dt$log_bookval), max(sp500_dt$log_bookval), length.out = 100)
+
+# Create prediction data for both tech and non-tech
+pred_non_tech <- data.frame(log_bookval = log_bookval_seq, technology = 0)
+pred_tech <- data.frame(log_bookval = log_bookval_seq, technology = 1)
+
+# Predict values
+pred_non_tech$log_mkt_cap <- predict(model_interaction, newdata = pred_non_tech)
+pred_tech$log_mkt_cap <- predict(model_interaction, newdata = pred_tech)
+
+# Plot the original data
+plot(sp500_dt$log_bookval, sp500_dt$log_mkt_cap, col = ifelse(sp500_dt$technology == 1, "red", "blue"),
+ pch = 16, xlab = "Log(Book Value)", ylab = "Log(Market Cap)",
+ main = "Regression Lines for Tech and Non-Tech Companies")
+
+# Add regression lines
+lines(pred_non_tech$log_bookval, pred_non_tech$log_mkt_cap, col = "blue", lwd = 2)
+lines(pred_tech$log_bookval, pred_tech$log_mkt_cap, col = "red", lwd = 2)
+
+# Add legend
+legend("topleft", legend = c("Non-Tech", "Tech"), col = c("blue", "red"), lwd = 2, pch = 16)
+
+```
+###Part D
+Compare the two models based on R2, Adj-R2, AIC and BIC
+```{r}
+comparison_df <- data.frame( Name = c('Model 4 Binary Variables', 'Model 1 Binary Variable + Interaction Term'),
+                             R2 = c(summary(model)$r.squared, summary(model_interaction)$r.squared),
+                             Adj_R2 = c(summary(model)$adj.r.squared, summary(model_interaction)$adj.r.squared),
+                             AIC_Score = c(AIC(model), AIC(model_interaction)),
+                             BIC_Score = c(BIC(model), BIC(model_interaction)))
+print(comparison_df)
+```
+All 4 measures criteria point to the second model i.e. log_mkt_cap ~ log_bookval + technology + techology * log_bookval being prefred over the second one. The R2 and Adjusted R2 are bigger, which points to more of variance explained of market cap explained by the interation model than its competitor. Additionally, its AIC and BIC scores are lower than its counterpart again proving to be the better choice, as AIC and BIC penalize the addition of redundant regressors much more severely than the Adjusted R2 
